@@ -1,5 +1,10 @@
-#include "board.h"
-#include "move.h"
+#pragma once
+
+#include "board.hh"
+#include "move.hh"
+#include "lookup.hh"
+
+namespace tc {
 
 /// @brief The compile-time movegen options
 struct StaticMovegenOptions {
@@ -14,22 +19,21 @@ constexpr StaticMovegenOptions defaultMovegenOptions { .verifyChecksOnOpponent =
 /// to the search function to verify whether moves don't put the king in check.
 template<typename _Consumer, StaticMovegenOptions const& _Options = defaultMovegenOptions, StaticBoardOptions const& _BoardOptions>
 u8 gen_pseudo_legal_moves(Board<_BoardOptions>* board, bool turn, _Consumer* consumer) {
-    std::cout << "c" << std::endl;
     u8 count = 0;
 
-    u64 slidingCheckingBB = 0;
-    u64 nonSlidingCheckingBB = 0;
-    u64 checkingBB = 0;
+    Bitboard slidingCheckingBB = 0;
+    Bitboard nonSlidingCheckingBB = 0;
+    Bitboard checkingBB = 0;
     if constexpr (!_Options.verifyCheckLegal) {
         // consumer and constraints
-        u64 slidingCheckingBB = get_unobstructed_sliding_checking_bb(board, turn);
-        u64 nonSlidingCheckingBB = get_non_sliding_checking_bb(board, turn);
-        u64 checkingBB = slidingCheckingBB | nonSlidingCheckingBB;
+        Bitboard slidingCheckingBB = get_unobstructed_sliding_checking_bb(board, turn);
+        Bitboard nonSlidingCheckingBB = get_non_sliding_checking_bb(board, turn);
+        Bitboard checkingBB = slidingCheckingBB | nonSlidingCheckingBB;
     }
 
     FunctionMoveConsumer moveConsumer([&](Move move) {
         if (checkingBB) {
-            u64 mutableCheckingBB = checkingBB;
+            Bitboard mutableCheckingBB = checkingBB;
 
             // must be a king move which avoids check, a capture which removes
             // the attacker or a move which blocks the attack with another piece
@@ -78,7 +82,7 @@ u8 gen_pseudo_legal_moves(Board<_BoardOptions>* board, bool turn, _Consumer* con
     });
 
     // use pieces bitboard to find indices of all pieces
-    u64 bbAll = board->allPiecesBBPerColor[turn];
+    Bitboard bbAll = board->allPiecesBBPerColor[turn];
     u8 index;
     BITBOARD_INDEX_LOOP_MUT_LE(bbAll, index) {
         Piece p = board->pieces[index];
@@ -101,7 +105,7 @@ u8 gen_pseudo_legal_moves(Board<_BoardOptions>* board, bool turn, _Consumer* con
 
 /// @brief Get a bitboard of all checking, non-sliding pieces.
 template<StaticBoardOptions const& _BoardOptions>
-inline u64 get_non_sliding_checking_bb(Board<_BoardOptions>* board, bool kingColor) {
+inline Bitboard get_non_sliding_checking_bb(Board<_BoardOptions>* board, bool kingColor) {
     u8 colValue = !kingColor * WHITE;
     return 
         (board->checkingSquaresBBs[kingColor][PAWN_MOBILITY] & board->pieceBBs[colValue | PAWN]) |
@@ -110,11 +114,11 @@ inline u64 get_non_sliding_checking_bb(Board<_BoardOptions>* board, bool kingCol
 
 /// @brief Get a bitboard of all checking, sliding pieces, note that these will not be obstructed by eachother.
 template<StaticBoardOptions const& _BoardOptions>
-inline u64 get_unobstructed_sliding_checking_bb(Board<_BoardOptions>* board, bool kingColor) {
+inline Bitboard get_unobstructed_sliding_checking_bb(Board<_BoardOptions>* board, bool kingColor) {
     if constexpr (_BoardOptions.calculateCheckingBitboards) {
         u8 colValue = !kingColor * WHITE;
-        u64 straight = board->checkingSquaresBBs[kingColor][STRAIGHT];
-        u64 diag = board->checkingSquaresBBs[kingColor][DIAGONAL];
+        Bitboard straight = board->checkingSquaresBBs[kingColor][STRAIGHT];
+        Bitboard diag = board->checkingSquaresBBs[kingColor][DIAGONAL];
         return 
             (straight & board->pieceBBs[colValue | ROOK]) |
             (diag & board->pieceBBs[colValue | BISHOP]) |
@@ -126,7 +130,7 @@ inline u64 get_unobstructed_sliding_checking_bb(Board<_BoardOptions>* board, boo
 
 /// @brief Get a bitboard of all checking pieces, note that these will not be obstructed by eachother.
 template<StaticBoardOptions const& _BoardOptions>
-inline u64 get_unobstructed_checking_bb(Board<_BoardOptions>* board, bool kingColor) {
+inline Bitboard get_unobstructed_checking_bb(Board<_BoardOptions>* board, bool kingColor) {
     if constexpr (_BoardOptions.calculateCheckingBitboards) {
         return get_non_sliding_checking_bb(board, kingColor) | get_unobstructed_checking_bb(board, kingColor);
     } else {
@@ -191,7 +195,7 @@ inline int movegen_pawn(Board<_BoardOptions>* board, _Consumer* consumer, u8 ind
     u8 file = FILE(index);
     u8 front = index + vdir;
     if (front >= 0 && front < 64) {
-        u64 enemyBB = board->allPiecesBBPerColor[1 - IS_WHITE_PIECE(p)];
+        Bitboard enemyBB = board->allPiecesBBPerColor[1 - IS_WHITE_PIECE(p)];
         if (file > 0 && ((enemyBB >> (dst = front - 1)) & 0x1) == 1) {
             move = { .piece = p,  .src = index, .dst = dst, .captured = board->pieces[dst], .isCheck = board->is_check_attack(1 - color, dst, PAWN_MOBILITY) };
             acceptMove(move);
@@ -202,7 +206,7 @@ inline int movegen_pawn(Board<_BoardOptions>* board, _Consumer* consumer, u8 ind
             acceptMove(move);
         }
 
-        u64 enPassant = board->enPassantTargetBBs[1 - IS_WHITE_PIECE(p)];
+        Bitboard enPassant = board->enPassantTargetBBs[1 - IS_WHITE_PIECE(p)];
         if (enPassant > 0) {
             // en passant can never be a promotion, so we dont
             // have to use acceptMove()
@@ -226,8 +230,8 @@ inline int movegen_pawn(Board<_BoardOptions>* board, _Consumer* consumer, u8 ind
 template<typename _Consumer, StaticMovegenOptions const& _Options, StaticBoardOptions const& _BoardOptions>
 inline int movegen_knight(Board<_BoardOptions>* board, _Consumer* consumer, u8 index, Piece p) {
     int count = 0;
-    u64 friendlyBB = board->allPiecesBBPerColor[IS_WHITE_PIECE(p)];
-    u64 enemyBB = board->allPiecesBBPerColor[!IS_WHITE_PIECE(p)];
+    Bitboard friendlyBB = board->allPiecesBBPerColor[IS_WHITE_PIECE(p)];
+    Bitboard enemyBB = board->allPiecesBBPerColor[!IS_WHITE_PIECE(p)];
 
     // knight move processing //
     auto addMoveTo = [&](u8 dst) __attribute__((always_inline)) {
@@ -260,8 +264,8 @@ template<typename _Consumer, StaticMovegenOptions const& _Options, StaticBoardOp
 inline int movegen_king(Board<_BoardOptions>* board, _Consumer* consumer, u8 index, Piece p) {
     int count = 0;
     bool color = IS_WHITE_PIECE(p);
-    u64 friendlyBB = board->allPiecesBBPerColor[color];
-    u64 enemyBB = board->allPiecesBBPerColor[!color];
+    Bitboard friendlyBB = board->allPiecesBBPerColor[color];
+    Bitboard enemyBB = board->allPiecesBBPerColor[!color];
     u8 file = FILE(index);
     u8 rank = RANK(index);
 
@@ -344,12 +348,12 @@ inline bool kingmove_check_legal(Board<_BoardOptions>* board, bool color, Move m
     u8 otherKingRank = RANK(otherKingRank);
 
     // check moving into attack
-    u64 bbs[MOBILITY_TYPE_COUNT];
-    board->recalculate_checking_bb_kingmove(color, move.dst, (u64*)&bbs);
+    Bitboard bbs[MOBILITY_TYPE_COUNT];
+    board->recalculate_checking_bb_kingmove(color, move.dst, (Bitboard*)&bbs);
     if ((board->pieceBBs[PAWN | ((!color) << 4)] & bbs[PAWN_MOBILITY]) > 0) return false;
     if ((board->pieceBBs[KNIGHT | ((!color) << 4)] & bbs[KNIGHT_MOBILITY]) > 0) return false;
-    u64 straight = bbs[STRAIGHT];
-    u64 diag = bbs[DIAGONAL];
+    Bitboard straight = bbs[STRAIGHT];
+    Bitboard diag = bbs[DIAGONAL];
     if ((board->pieceBBs[((1 - color) << 4) | BISHOP] & diag) > 0) return false;
     if ((board->pieceBBs[((1 - color) << 4) | ROOK] & straight) > 0) return false;
     if ((board->pieceBBs[((1 - color) << 4) | QUEEN] & (diag | straight)) > 0) return false;
@@ -364,8 +368,8 @@ inline int movegen_rook(Board<_BoardOptions>* board, _Consumer* consumer, u8 ind
     u8 file = FILE(index);
     u8 rank = RANK(index);
 
-    u64 enemyBB = board->allPiecesBBPerColor[!color];
-    u64 friendlyBB = board->allPiecesBBPerColor[color];
+    Bitboard enemyBB = board->allPiecesBBPerColor[!color];
+    Bitboard friendlyBB = board->allPiecesBBPerColor[color];
 
     // rook move verification //
     auto addMoveTo = [&](u8 dst) __attribute__((always_inline)) {
@@ -432,8 +436,8 @@ inline int movegen_bishop(Board<_BoardOptions>* board, _Consumer* consumer, u8 i
     u8 file = FILE(index);
     u8 rank = RANK(index);
 
-    u64 enemyBB = board->allPiecesBBPerColor[!color];
-    u64 friendlyBB = board->allPiecesBBPerColor[color];
+    Bitboard enemyBB = board->allPiecesBBPerColor[!color];
+    Bitboard friendlyBB = board->allPiecesBBPerColor[color];
 
     // bishop move verification //
     auto addMoveTo = [&](u8 dst) __attribute__((always_inline)) {
@@ -488,4 +492,6 @@ inline int movegen_bishop(Board<_BoardOptions>* board, _Consumer* consumer, u8 i
     }
     
     return count;
+}
+
 }

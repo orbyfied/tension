@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "tripileychess",
+        .name = "tensionchess",
         .root_source_file = null,
         .target = target,
         .optimize = optimize,
@@ -77,7 +77,7 @@ pub fn addSources(directory: []const u8, b: *std.Build, c: *std.Build.Step.Compi
     var walker = try dir.walk(b.allocator);
     defer walker.deinit();
 
-    const allowed_exts = [_][]const u8{ ".c", ".cpp" };
+    const allowed_exts = [_][]const u8{ ".cc", ".cpp", ".c", ".cxx" };
 
     while (try walker.next()) |entry| {
         const ext = std.fs.path.extension(entry.basename);
@@ -87,7 +87,7 @@ pub fn addSources(directory: []const u8, b: *std.Build, c: *std.Build.Step.Compi
         } else false;
 
         if (include_file) {
-            c.addCSourceFile(.{ .file = b.path(try std.fs.path.resolve(b.allocator, &.{ "src", entry.path })), .flags = &.{ "-std=c++23", "-DPLATFORM_WINDOWS", "-Wno-deprecated-enum-enum-conversion", "-Wunused-value" } });
+            c.addCSourceFile(.{ .file = b.path(try std.fs.path.resolve(b.allocator, &.{ "src", entry.path })), .flags = &.{ "-std=c++23", "-DPLATFORM_WINDOWS", "-Wno-deprecated-enum-enum-conversion", "-Wunused-value", "-O3" } });
         }
     }
 }

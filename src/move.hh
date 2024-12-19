@@ -4,8 +4,10 @@
 #include <sstream>
 #include <concepts>
 
-#include "types.h"
-#include "piece.h"
+#include "types.hh"
+#include "piece.hh"
+
+namespace tc {
 
 #define CASTLED_L (1 << 0)      // Has castled Queen Side (left)
 #define CASTLED_R (1 << 1)      // Has castled King Side (right)
@@ -50,7 +52,7 @@ enum MobilityType {
 #define r8 7 << 3
 
 /// @brief All data about a move 
-struct alignas(4) Move {
+struct Move {
     // The source piece originally moved
     Piece piece : 6;
     // The source and destination indices
@@ -105,10 +107,12 @@ enum MoveOrderingType {
 /// @param _MoveOrderer Must be a class with a field `constexpr MoveOrderingType moveOrderingType` 
 template<typename _MoveOrderer, u16 _Capacity>
 struct MoveList {
-    u16 count = 0;          // The amount of moves in the array
-    Move moves[_Capacity];  // The data array
+    u16 reserved = 0;                       // The amount of indices reserved at the start of the array for pre-defined
+                                            // highly sorted moves.
+    u16 count = 0;                          // The amount of moves in the array.
+    Move moves[_Capacity] = { NULL_MOVE };  // The data array.
 
-    u16 scores[_Capacity];  // The estimated scores for every move in the list, used for sorting
+    u16 scores[_Capacity];                  // The estimated scores for every move in the list, used for sorting.
     
     inline void accept(Move move) {
         if constexpr (_MoveOrderer::moveOrderingType == NO_MOVE_ORDERING) { 
@@ -159,3 +163,5 @@ struct BasicCompareMoveOrderer {
         return 0; // todo
     }
 };
+
+}

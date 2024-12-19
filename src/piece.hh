@@ -1,6 +1,8 @@
 #pragma once
 
-#include "types.h"
+namespace tc {
+
+#include "types.hh"
 #include <stdlib.h>
 
 /// @brief The player color MASK
@@ -91,3 +93,5 @@ static u16 materialValuePerType[] = {
     0,   // COUNT
     0,   // NULL
 };
+
+}

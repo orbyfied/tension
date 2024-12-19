@@ -3,10 +3,13 @@
 #include <memory.h>
 #include <iostream>
 
-#include "types.h"
-#include "bitboard.h"
-#include "piece.h"
-#include "move.h"
+#include "types.hh"
+#include "bitboard.hh"
+#include "piece.hh"
+#include "move.hh"
+#include "lookup.hh"
+
+namespace tc {
 
 struct StaticBoardOptions {
     constexpr StaticBoardOptions(bool ccb): calculateCheckingBitboards(ccb) { }
@@ -28,6 +31,9 @@ struct ExtMove {
 
     /// @brief The attack bitboards before the move, done to avoid recalculation.
     Bitboard lastAttackBBs[2];
+
+    // /// @brief The checking bitboard for our side
+    // Bitboard checkingBB[4];
 };
 
 /// @brief Representation of the board
@@ -35,9 +41,9 @@ template<StaticBoardOptions const& _BoardOptions>
 struct Board {
     Board() {
         memset(&pieces, NULL_PIECE, 64);
-        memset(&pieceBBs, 0, 32 * sizeof(u64));
-        memset(&allPiecesBBPerColor, 0, 2 * sizeof(u64));
-        memset(&checkingSquaresBBs, 0, MOBILITY_TYPE_COUNT * 2 * sizeof(u64));
+        memset(&pieceBBs, 0, 32 * sizeof(Bitboard));
+        memset(&allPiecesBBPerColor, 0, 2 * sizeof(Bitboard));
+        memset(&checkingSquaresBBs, 0, MOBILITY_TYPE_COUNT * 2 * sizeof(Bitboard));
         // memset(&castlingRookIndices, 0, 2 * 2 * sizeof(u8));
         allPiecesBB = 0;
     }
@@ -52,13 +58,13 @@ struct Board {
 
     /// @brief The piece position bitboards per piece type per color,
     /// equivalent to being index by the piece value
-    u64 pieceBBs[1 << (4 + 2)];
+    Bitboard pieceBBs[1 << (4 + 2)];
 
     /// @brief All pieces for each color
-    u64 allPiecesBBPerColor[2];
+    Bitboard allPiecesBBPerColor[2];
 
     /// @brief All pieces on the board
-    u64 allPiecesBB = 0;
+    Bitboard allPiecesBB = 0;
 
     /// @brief Whether it is white's turn to move
     bool whiteTurn;
@@ -67,16 +73,16 @@ struct Board {
     u8 kingIndexPerColor[2] = { 0, 0 };
 
     /// @brief Bitboards of checking squares per mobility type per color
-    u64 checkingSquaresBBs[2][MOBILITY_TYPE_COUNT]; 
+    Bitboard checkingSquaresBBs[2][MOBILITY_TYPE_COUNT]; 
 
     /// @brief Bitboars of en passant positions per color
-    u64 enPassantTargetBBs[2] = { 0, 0 };
+    Bitboard enPassantTargetBBs[2] = { 0, 0 };
 
     /// @brief Castling status per color
     u8 castlingStatus[2] = { CAN_CASTLE_L | CAN_CASTLE_R, CAN_CASTLE_L | CAN_CASTLE_R };
 
     /// @brief All attacked squares by each color EXCLUDING en passant.
-    u64 attackBBsPerColor[2] = { 0, 0 };
+    Bitboard attackBBsPerColor[2] = { 0, 0 };
 
     /// @brief Set the given piece from the board, inlined to allow optimization in move making
     /// @param index The index to set the piece at.
@@ -97,7 +103,7 @@ struct Board {
             // check for king update
             if (TYPE_OF_PIECE(p) == KING) {
                 kingIndexPerColor[color] = index;
-                recalculate_checking_bb_kingmove(color, index, (u64*)&checkingSquaresBBs[color]);
+                recalculate_checking_bb_kingmove(color, index, (Bitboard*)&checkingSquaresBBs[color]);
             } else {
                 update_checking_bb_piecemove<false>(color, index);
             }
@@ -120,11 +126,11 @@ struct Board {
             // todo: update attack bitboard with piece removal (prob recalc fully)
         }
 
-        if constexpr (_BoardOptions.calculateCheckingBitboards) {
+        if constexpr (updateAdvancedBitboards && _BoardOptions.calculateCheckingBitboards) {
             // king removal lol
             if (TYPE_OF_PIECE(p) == KING) {
                 kingIndexPerColor[color] = 0;
-                memset(&checkingSquaresBBs[color], 0, MOBILITY_TYPE_COUNT * sizeof(u64));
+                memset(&checkingSquaresBBs[color], 0, MOBILITY_TYPE_COUNT * sizeof(Bitboard));
             } else if (TYPE_OF_PIECE(p) > KNIGHT) {
                 update_checking_bb_piecemove<true>(color, index);
             }
@@ -144,6 +150,9 @@ struct Board {
             // store info for undo
             extMove->lastAttackBBs[0] = attackBBsPerColor[0];
             extMove->lastAttackBBs[1] = attackBBsPerColor[1];
+            // if (TYPE_OF_PIECE(p) == KING) {
+            //     extMove->checkingBB = checkingSquaresBBs[color];
+            // }
         }
 
         // handle en passant and captures
@@ -203,6 +212,9 @@ struct Board {
             // restore info
             attackBBsPerColor[0] = extMove->lastAttackBBs[0];
             attackBBsPerColor[1] = extMove->lastAttackBBs[1];
+            // if (TYPE_OF_PIECE(p) == KING) {
+            //     checkingSquaresBBs[color] = extMove->checkingBB;
+            // }
         }
 
         if (move.promotionType != NULL_PIECE_TYPE) {
@@ -260,13 +272,13 @@ struct Board {
         return (pieceBBs[WHITE * color | KING] & attackBBsPerColor[!color]) > 0;
     }
 
-    inline void recalculate_checking_bb_kingmove(bool color, u8 kingIndex, u64* bbs) {
+    inline void recalculate_checking_bb_kingmove(bool color, u8 kingIndex, Bitboard* bbs) {
         u8 file = FILE(kingIndex);
         u8 rank = RANK(kingIndex);
 
         // pawn checks
         u8 vdir = SIDE_OF_COLOR(color) * 8;
-        u64 pawnBB = 0;
+        Bitboard pawnBB = 0;
         if (kingIndex + vdir < 64) {
             if (file > 0) pawnBB |= 1ULL << (kingIndex + vdir - 1);
             if (file < 7) pawnBB |= 1ULL << (kingIndex + vdir + 1);
@@ -275,7 +287,7 @@ struct Board {
         bbs[PAWN_MOBILITY] = pawnBB;
 
         // knight checks
-        u64 knightBB = 0;
+        Bitboard knightBB = 0;
         if (file > 1 && rank < 6) knightBB |= 1ULL << (kingIndex + 8 * 2 - 1);
         if (file > 2 && rank < 7) knightBB |= 1ULL << (kingIndex + 8 * 1 - 2);
         if (file > 1 && rank > 1) knightBB |= 1ULL << (kingIndex - 8 * 2 - 1);
@@ -292,8 +304,8 @@ struct Board {
     template<bool remove>
     inline void update_checking_bb_piecemove(bool color, u8 pieceIndex) {
         u8 kingIndex = kingIndexPerColor[color];
-        u64 diagBB = checkingSquaresBBs[color][DIAGONAL];
-        u64 straightBB = checkingSquaresBBs[color][STRAIGHT];
+        Bitboard diagBB = checkingSquaresBBs[color][DIAGONAL];
+        Bitboard straightBB = checkingSquaresBBs[color][STRAIGHT];
 
         if ((diagBB & (1ULL << pieceIndex)) > 0) {
             // recalculate diagonal bb
@@ -377,6 +389,7 @@ struct Board {
     /* Bitboard Attack Generation */
 
     /// @brief Update the attack bitboard excluding en passant for the adding of the given piece in the current state of the board.
+    /// The attacks include coverage of own pieces.
     /// This includes the attacks of the piece but also the blocking and unblocking of other attacks.
     inline void update_attack_bb_pieceadd(u8 index, Piece p) {
         u8 file = FILE(index);
@@ -386,30 +399,51 @@ struct Board {
         // check for blocks/unblocks on other attacks
 
         // set own attack bitboard
-        u64 ourAttackBB = attackBBsPerColor[color];
+        Bitboard ourAttackBB = attackBBsPerColor[color];
         switch (TYPE_OF_PIECE(p))
         {
         case PAWN: {
-            constexpr PrecalcPawnAttackBBs pawnBBs { }; // lookup table
-            ourAttackBB |= pawnBBs.values[color][index];
+            ourAttackBB |= lookup::precalcPawnAttackBBs.values[color][index];
             break; }
         case KNIGHT: {
-            constexpr PrecalcKnightAttackBBs knightBBs { }; // lookup table
-            ourAttackBB |= knightBBs.values[index];
+            ourAttackBB |= lookup::precalcKnightAttackBBs.values[index];
             break; }
         case KING: { 
-            constexpr PrecalcKingAttackBBs kingBBs { }; // lookup table
-            ourAttackBB |= kingBBs.values[index];
+            ourAttackBB |= lookup::precalcKingAttackBBs.values[index];
             break; }
 
         /* slider pieces */
-        case BISHOP: break;
-        case ROOK: break;
-        case QUEEN: break;
+        case BISHOP: ourAttackBB |= gen_attack_bb_bishop(index, p); break;
+        case ROOK: ourAttackBB |= gen_attack_bb_rook(index, p); break;
+        case QUEEN: ourAttackBB |= gen_attack_bb_rook(index, p) | gen_attack_bb_bishop(index, p); break;
         
         default: break;
         }
 
         attackBBsPerColor[color] = ourAttackBB;
     }
+
+    /// @brief Generate a bitboard of all squares directly attacked by a rook on the given square.
+    inline Bitboard gen_attack_bb_rook(u8 index, Piece p) {
+        bool color = IS_WHITE_PIECE(p);
+
+        // generate bitboard with captures
+        Bitboard unobstructed = lookup::precalcUnobstructedStraightSlidingAttackBBs.values[index];
+        Bitboard relevantBlockers = allPiecesBB & unobstructed;
+
+        return unobstructed;
+    }
+
+    /// @brief Generate a bitboard of all squares directly attacked by a bishop on the given square.
+    inline Bitboard gen_attack_bb_bishop(u8 index, Piece p) {
+        bool color = IS_WHITE_PIECE(p);
+
+        // generate bitboard with captures
+        Bitboard unobstructed = lookup::precalcUnobstructedDiagonalSlidingAttackBBs.values[index];
+        Bitboard relevantBlockers = allPiecesBB & unobstructed;
+
+        return unobstructed;
+    }
 };
+
+}

@@ -1,23 +1,33 @@
-#include "debug.h"
+#include "debug.hh"
 
-void debug_tostr_bitboard(std::ostringstream& oss, u64 bb) {
+using namespace tc;
+
+void tc::debug_tostr_bitboard(std::ostringstream& oss, u64 bb, BitboardToStrOptions options) {
     const std::string rowSep = "   +---+---+---+---+---+---+---+---+";
-    oss <<                     "     H   G   F   E   D   C   B   A" << std::endl;
+    oss <<                     "     A   B   C   D   E   F   G   H" << std::endl;
     oss << rowSep << "\n";
     for (int rank = 7; rank >= 0; rank--) {
         oss << " " << (rank + 1) << " |";
-        for (int file = 7; file >= 0; file--) {
-            bool b = (bool)((bb >> INDEX(file, rank)) & 0x1);
-            oss << (b ? GRNB : REDB) << " " << (int)b << " " << reset << "|";
+        for (int file = 0; file < 8; file++) {
+            u8 index = INDEX(file, rank);
+            bool b = (bool)((bb >> index) & 0x1);
+
+            char c = options.highlightChars[index];
+            bool highlighted = c != 0;
+            if (c == 0) {
+                c = '0' + b;
+            }
+
+            oss << (b ? GRNB : REDB) << " " << c << " " << reset << "|";
         }
 
         oss << "\n" << rowSep << "\n";
     }
 
-    oss <<                     "     H   G   F   E   D   C   B   A" << std::endl;
+    oss <<                     "     A   B   C   D   E   F   G   H" << std::endl;
 }
 
-void debug_tostr_move(std::ostringstream& oss, Move move) {
+void tc::debug_tostr_move(std::ostringstream& oss, Move move) {
     oss << pieceToChar(move.piece) << " ";
     oss << FILE_TO_CHAR(FILE(move.src)) << RANK_TO_CHAR(RANK(move.src));
     oss << FILE_TO_CHAR(FILE(move.dst)) << RANK_TO_CHAR(RANK(move.dst));

@@ -5,9 +5,11 @@
 #include <io.h>
 #include <fcntl.h>
 
-#include "board.h"
-#include "debug.h"
-#include "engine.h"
+#include "board.hh"
+#include "debug.hh"
+#include "engine.hh"
+
+using namespace tc;
 
 constexpr extern StaticBoardOptions options { true };
 
@@ -20,7 +22,7 @@ int perft(Board<_BoardOptions>* board, int depth) {
     int count = 0;
     MoveList<NoOrderMoveOrderer, 128> moveList;
     std::cout << "a" << std::endl;
-    gen_pseudo_legal_moves(board, board->whiteTurn, &moveList);
+    // gen_pseudo_legal_moves(board, board->whiteTurn, &moveList);
     count += moveList.count;
     
     // for each node, perft more moves
@@ -39,20 +41,23 @@ int main() {
 
     Board<options> board;
 
-    board.set_piece<true>(fA | r5, WHITE | PAWN);
-    board.set_piece<true>(fA | r6, WHITE | ROOK);
-    board.set_piece<true>(fC | r2, WHITE | PAWN);
-    board.set_piece<true>(fD | r3, WHITE | PAWN);
-    board.set_piece<true>(fE | r6, BLACK | PAWN);
-    board.set_piece<true>(fB | r2, WHITE | PAWN);
-    board.set_piece<true>(fF | r7, WHITE | PAWN);
-    board.set_piece<true>(fD | r4, WHITE | KNIGHT);
+    board.set_piece<true>(fC | r3, BLACK | PAWN);   // add pawn before bishop, info on this pawn
+    board.set_piece<true>(fF | r6, WHITE | BISHOP); // add bishop
+    board.set_piece<true>(fF | r5, BLACK | PAWN);   // add second pawn, bishop attack must be blocked
+    board.set_piece<true>(fC | r5, WHITE | ROOK);   // add rook, has info on both pawns
+    board.set_piece<true>(fC | r7, BLACK | PAWN);   // add third pawn, bishop and rook attacks must be blocked
 
-    // board.set_piece(fF | r6, BLACK | PAWN);
-    // board.set_piece(fG | r5, WHITE | PAWN);
-
-    board.set_piece<true>(fE | r5, WHITE | KING);
-    board.set_piece<true>(fE | r7, BLACK | KING);
+    // debug bitboards
+    std::ostringstream oss;
+    oss << "\n";
+    BitboardToStrOptions strOptions;
+    strOptions.highlightChars[fC | r7] = '-';
+    strOptions.highlightChars[fF | r5] = '+';
+    strOptions.highlightChars[fC | r3] = '_';
+    debug_tostr_bitboard(oss, board.attackBBsPerColor[1], strOptions);
+    oss << "\n\n";
+    debug_tostr_board(oss, board, { });
+    std::cout << oss.str();
 
     // board.load_fen("8/8/8/8/8/8/8/R3K1PR w - - 0 1");
     // board.set_piece<true>(fC | r3, WHITE | KNIGHT);
@@ -63,10 +68,10 @@ int main() {
     // debug_tostr_bitboard(oss1, board.allPiecesBB);
     // std::cout << oss1.str() << std::endl;
 
-    ExtMove<true> extMove({ .piece = WHITE | PAWN, .src = fE | r2, .dst = fE | r4, .isDoublePush = true });
-    board.make_move_unchecked(&extMove);
+    // ExtMove<true> extMove({ .piece = WHITE | PAWN, .src = fE | r2, .dst = fE | r4, .isDoublePush = true });
+    // board.make_move_unchecked(&extMove);
 
-    std::cout << perft<options>(&board, 4) << std::endl;
+    // std::cout << perft<options>(&board, 4) << std::endl;
 
     // Handled In Movegen:
     // x castling
@@ -136,12 +141,4 @@ int main() {
         // std::cout << oss.str();
         // board.unmake_move_unchecked(moveList.moves[i]);
     // }
-
-    // debug bitboards
-    std::ostringstream oss;
-    oss << "\n";
-    debug_tostr_bitboard(oss, board.attackBBsPerColor[1]);
-    oss << "\n\n";
-    debug_tostr_board(oss, board, { });
-    std::cout << oss.str();
 }

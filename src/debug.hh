@@ -2,15 +2,21 @@
 
 #include <string>
 #include <sstream>
-#include "board.h"
-#include "util/debug.h"
+#include "board.hh"
+#include "util/debug.hh"
+
+namespace tc {
+
+struct BitboardToStrOptions {
+    char highlightChars[64] = { 0 };
+};
 
 struct BoardToStrOptions {
     Move highlightedMove = NULL_MOVE;
 };
 
 /// @brief Visualize the bitboard in a string using a board layout and ANSI color codes
-void debug_tostr_bitboard(std::ostringstream& oss, u64 bb);
+void debug_tostr_bitboard(std::ostringstream& oss, u64 bb, BitboardToStrOptions options);
 
 /// @brief Visualize the given board using a board layout and ANSI color codes, also prints information such as castling
 template<StaticBoardOptions const& _BoardOptions>
@@ -76,3 +82,5 @@ void debug_tostr_board(std::ostringstream& oss, Board<_BoardOptions>& b, BoardTo
 
 /// @brief Write a string containing all move info
 void debug_tostr_move(std::ostringstream& oss, Move move);
+
+}
