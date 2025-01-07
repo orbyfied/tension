@@ -19,10 +19,9 @@ struct BoardToStrOptions {
 void debug_tostr_bitboard(std::ostringstream& oss, u64 bb, BitboardToStrOptions options);
 
 /// @brief Visualize the given board using a board layout and ANSI color codes, also prints information such as castling
-template<StaticBoardOptions const& _BoardOptions>
-void debug_tostr_board(std::ostringstream& oss, Board<_BoardOptions>& b, BoardToStrOptions options) {
+void debug_tostr_board(std::ostringstream& oss, Board& b, BoardToStrOptions options) {
     // collect additional info
-    u64 enPassantTargets = b.enPassantTargetBBs[0] | b.enPassantTargetBBs[1];
+    u64 enPassantTargets = b.current_state()->enPassantTargets[0] | b.current_state()->enPassantTargets[1];
 
     const std::string rowSep = "   +---+---+---+---+---+---+---+---+";
     oss <<                     "     A   B   C   D   E   F   G   H" << std::endl;
@@ -65,22 +64,24 @@ void debug_tostr_board(std::ostringstream& oss, Board<_BoardOptions>& b, BoardTo
         switch (rank)
         {
         case 3:
-            oss << "  Material: W " << b.count_material(1) << " B " << b.count_material(0);
+            // oss << "  Material: W " << b.template count_material<WHITE>() << " B " << b.template count_material<BLACK>();
             break;
         }
 
         oss << "\n" << rowSep << "\n";
     }
 
+    BoardState& state = *b.current_state();
+
     oss <<                     "     A   B   C   D   E   F   G   H" << std::endl << std::endl;
-    oss << "   * in check? W: " << b.is_in_check(true) << " B: " << b.is_in_check(false) << std::endl;
-    oss << "   * castling W: 0b" << std::bitset<4>(b.castlingStatus[1]) << " " << (b.castlingStatus[1] & CASTLED_L ? "castled Q" : (b.castlingStatus[1] & CASTLED_R ? "castled K" : "not castled")) 
-        << ", rights: " << (b.castlingStatus[1] & CAN_CASTLE_L ? "Q" : "") << (b.castlingStatus[1] & CAN_CASTLE_R ? "K" : "") << std::endl;
-    oss << "   * castling B: 0b" << std::bitset<4>(b.castlingStatus[1]) << " " << (b.castlingStatus[0] & CASTLED_L ? "castled Q" : (b.castlingStatus[0] & CASTLED_R ? "castled K" : "not castled")) 
-        << ", rights: " << (b.castlingStatus[0] & CAN_CASTLE_L ? "Q" : "") << (b.castlingStatus[0] & CAN_CASTLE_R ? "K" : "") << std::endl;
+    oss << "   * in check? W: " << b.template is_in_check<WHITE>() << " B: " << b.template is_in_check<BLACK>() << std::endl;
+    oss << "   * castling W: 0b" << std::bitset<4>(state.castlingStatus[1]) << " " << (state.castlingStatus[1] & CASTLED_L ? "castled Q" : (state.castlingStatus[1] & CASTLED_R ? "castled K" : "not castled")) 
+        << ", rights: " << (state.castlingStatus[1] & CAN_CASTLE_L ? "Q" : "") << (state.castlingStatus[1] & CAN_CASTLE_R ? "K" : "") << std::endl;
+    oss << "   * castling B: 0b" << std::bitset<4>(state.castlingStatus[1]) << " " << (state.castlingStatus[0] & CASTLED_L ? "castled Q" : (state.castlingStatus[0] & CASTLED_R ? "castled K" : "not castled")) 
+        << ", rights: " << (state.castlingStatus[0] & CAN_CASTLE_L ? "Q" : "") << (state.castlingStatus[0] & CAN_CASTLE_R ? "K" : "") << std::endl;
 }
 
 /// @brief Write a string containing all move info
-void debug_tostr_move(std::ostringstream& oss, Move move);
+void debug_tostr_move(std::ostringstream& oss, Board& b, Move move);
 
 }

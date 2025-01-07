@@ -13,14 +13,22 @@ namespace tc {
 #define CASTLED_R (1 << 1)      // Has castled King Side (right)
 #define CAN_CASTLE_L (1 << 2)   // Castle rights Queen side (left)
 #define CAN_CASTLE_R (1 << 3)   // Castle rights King side (right)
-#define MOVE_CASTLE_L CASTLED_L // Castle Queen side move (left)
-#define MOVE_CASTLE_R CASTLED_R // Castle King side move (left)
+
+#define MOVE_EN_PASSANT     0x1
+#define MOVE_PROMOTE_KNIGHT 0x2
+#define MOVE_PROMOTE_BISHOP 0x3
+#define MOVE_PROMOTE_ROOK   0x4
+#define MOVE_PROMOTE_QUEEN  0x5
+#define MOVE_CASTLE_RIGHT   0x6
+#define MOVE_CASTLE_LEFT    0x7
+#define MOVE_DOUBLE_PUSH    0x8
 
 enum MobilityType {
     PAWN_MOBILITY,
     KNIGHT_MOBILITY,
     DIAGONAL,
     STRAIGHT,
+    QUEEN_MOBILITY,
 
     MOBILITY_TYPE_COUNT
 };
@@ -33,134 +41,93 @@ enum MobilityType {
 #define FILE_TO_CHAR(file) ((char)((file) + 'a'))
 #define RANK_TO_CHAR(rank) ((char)((rank) + '1'))
 
-#define fA 0
-#define fB 1
-#define fC 2
-#define fD 3
-#define fE 4
-#define fF 5
-#define fG 6
-#define fH 7
+enum : int {
+    fA = 0,
+    fB = 1,
+    fC = 2,
+    fD = 3,
+    fE = 4,
+    fF = 5,
+    fG = 6,
+    fH = 7
+};
 
-#define r1 0 << 3
-#define r2 1 << 3
-#define r3 2 << 3
-#define r4 3 << 3
-#define r5 4 << 3
-#define r6 5 << 3
-#define r7 6 << 3
-#define r8 7 << 3
+enum : int {
+    r1 = 0 << 3,
+    r2 = 1 << 3,
+    r3 = 2 << 3,
+    r4 = 3 << 3,
+    r5 = 4 << 3,
+    r6 = 5 << 3,
+    r7 = 6 << 3,
+    r8 = 7 << 3
+};
+
+struct Board;
 
 /// @brief All data about a move 
 struct Move {
-    // The source piece originally moved
-    Piece piece : 6;
+    static inline Move make(u8 src, u8 dst) { return { .src = src, .dst = dst }; }
+    static inline Move make(u8 src, u8 dst, u8 flags) { return { .src = src, .dst = dst, .flags = flags }; }
+    static inline Move make_en_passant(u8 src, u8 dst) { return { .src = src, .dst = dst, .flags = MOVE_EN_PASSANT }; }
+    static inline Move make_castle_left(u8 src, u8 dst) { return { .src = src, .dst = dst, .flags = MOVE_CASTLE_LEFT }; }
+    static inline Move make_castle_right(u8 src, u8 dst) { return { .src = src, .dst = dst, .flags = MOVE_CASTLE_RIGHT }; }
+    static inline Move make_double_push(u8 src, u8 dst) { return { .src = src, .dst = dst, .flags = MOVE_EN_PASSANT }; }
+
     // The source and destination indices
-    u8 src : 8;
-    u8 dst : 8;
-    // The captured piece or NULL_PIECE of no capture occurred
-    Piece captured : 6 = NULL_PIECE;
-    // Whether the move creates a check on the king
-    bool isCheck : 1 = false;
-     // Whether the move is en passant
-    bool enPassant : 1 = false;
-    // Whether this move is a promotion, if so, to what
-    PieceType promotionType : 4 = NULL_PIECE_TYPE;
-    // The castling operations this move performs, where the castling right flags actually revoke the castling rights.
-    u8 castleOperations : 4 = 0;
-    // The position (file) on the rank of the rook before castling
-    u8 rookFile : 3 = 0;
-    // Whether the move is a double pawn push
-    bool isDoublePush : 1 = false;
+    u8 src : 6;
+    u8 dst : 6;
+    // The additional move flags
+    u8 flags : 4 = 0;
 
-    inline bool isNull() {
-        return src == 0 && dst == 0;
-    }
+    inline bool isNull() const { return src == 0 && dst == 0; }
 
-    inline u8 captureIndex() {
-        return dst - (enPassant * SIDE_OF_PIECE(piece) * 8);
+    inline u8 source() const { return src; }
+    inline u8 destination() const { return dst; }
+    inline u8 flags_raw() const { return flags; }
+
+    Piece moved_piece(Board const* b) const;
+    Piece captured_piece(Board const* b) const;
+    bool is_capture(Board const* b) const;
+
+    inline bool is_double_push() const { return flags == MOVE_DOUBLE_PUSH; }
+    inline bool is_en_passant() const { return flags == MOVE_EN_PASSANT; }
+    inline bool is_promotion() const { return flags == MOVE_PROMOTE_KNIGHT || flags == MOVE_PROMOTE_BISHOP || flags == MOVE_PROMOTE_ROOK || flags == MOVE_PROMOTE_QUEEN; }
+    inline bool is_castle() const { return flags == MOVE_CASTLE_LEFT || flags == MOVE_CASTLE_RIGHT; }
+    inline bool is_castle_left() const { return flags == MOVE_CASTLE_LEFT; }
+    inline bool is_castle_right() const { return flags == MOVE_CASTLE_RIGHT; }
+    inline PieceType promotion_piece() const {
+        switch (flags) {
+            case MOVE_PROMOTE_KNIGHT: return KNIGHT;
+            case MOVE_PROMOTE_BISHOP: return BISHOP;
+            case MOVE_PROMOTE_ROOK:   return ROOK;
+            case MOVE_PROMOTE_QUEEN:  return QUEEN;
+        }
+
+        return NULL_PIECE_TYPE;
     }
 };
 
 /// Represents the absence of a move.
-static Move NULL_MOVE = { .piece = NULL_PIECE, .src = 0, .dst = 0 };
+static Move NULL_MOVE = { .src = 0, .dst = 0 };
 
-template<typename _Func>
-struct FunctionMoveConsumer {
-    FunctionMoveConsumer(_Func func): func(func) { }
+#define MOVE_HASH(move) ((i32)((move.src) | (move.dst << 6)))
 
-    _Func func;
+/// @brief Heap-allocated hashtable containing cached scores for moves derived from the evaluation during search
+struct MoveEvalTable {
+    i32* data = nullptr;
+    i32 capacity;
 
-    inline void accept(Move move) {
-        func(move);
+    void alloc(i32 capacityInEntries); 
+    void free();
+    ~MoveEvalTable();
+
+    inline void add(Move move, i32 eval) {
+        this->data[MOVE_HASH(move) % capacity] = eval;
     }
-};
 
-enum MoveOrderingType {
-    NO_MOVE_ORDERING,      // No move ordering, doesn't perform logic
-    COMPARE_MOVE_ORDERING, // Compares each move with every other move
-    SCORE_MOVE_ORDERING    // Gives a score to each move
-};
-
-/// @brief An automatically sorted, stack allocated move list which can 
-/// be provided as a consumer for movegen functions.
-/// @param _MoveOrderer Must be a class with a field `constexpr MoveOrderingType moveOrderingType` 
-template<typename _MoveOrderer, u16 _Capacity>
-struct MoveList {
-    u16 reserved = 0;                       // The amount of indices reserved at the start of the array for pre-defined
-                                            // highly sorted moves.
-    u16 count = 0;                          // The amount of moves in the array.
-    Move moves[_Capacity] = { NULL_MOVE };  // The data array.
-
-    u16 scores[_Capacity];                  // The estimated scores for every move in the list, used for sorting.
-    
-    inline void accept(Move move) {
-        if constexpr (_MoveOrderer::moveOrderingType == NO_MOVE_ORDERING) { 
-            moves[count++] = move;
-        } else if constexpr (_MoveOrderer::moveOrderingType == SCORE_MOVE_ORDERING) {
-            u16 score = _MoveOrderer::score_move(move);
-
-            // check trivial case, we sort in ascending order because
-            // we can simply traverse the array in reverse
-            if (score >= moves[count - 1]) {
-                moves[count++] = move;
-                scores[count] = score;
-                return;
-            }
-
-            // find index and insert into appropriate location
-            int index = 0;
-            while (score >= scores[index]) index++;
-            memmove(&moves[index + 1], &moves[index], (count - index) * sizeof(Move));
-            memmove(&scores[index + 1], &scores[index], (count - index) * sizeof(Move));
-            moves[index] = move;
-            scores[index] = score;
-        }
-    }
-};
-
-/// Doesn't perform any move ordering.
-struct NoOrderMoveOrderer {
-    constexpr static MoveOrderingType moveOrderingType = NO_MOVE_ORDERING;
-};
-
-/// Scores each move on some basic properties
-struct BasicScoreMoveOrderer {
-    constexpr static MoveOrderingType moveOrderingType = SCORE_MOVE_ORDERING;
-
-    static u16 score_move(Move move) {
-        return /* checks */ move.isCheck * 5000 +
-                /* capture */ (move.captured != NULL_PIECE) * (materialValuePerType[TYPE_OF_PIECE(move.captured)] * 4 - materialValuePerType[TYPE_OF_PIECE(move.piece)]) +
-                /* promotion */ (move.promotionType != NULL_PIECE_TYPE) * 1000;
-    }
-};
-
-/// Compares each move
-struct BasicCompareMoveOrderer {
-    constexpr static MoveOrderingType moveOrderingType = COMPARE_MOVE_ORDERING;
-
-    static int compare_move(Move a, Move b) {
-        return 0; // todo
+    inline i32 get_adjustment(Move move) {
+        return this->data[MOVE_HASH(move) % capacity];
     }
 };
 

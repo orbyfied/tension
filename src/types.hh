@@ -1,9 +1,13 @@
 #pragma once
 
 #include <stdint.h>
+#include <immintrin.h>
 
 #define MIN(a, b) (((a) > (b)) ? (b) : (a))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+
+#define CONCAT_AUX(A, B) A ## B
+#define CONCAT(A, B) CONCAT_AUX(A, B)
 
 /* Base Types */
 typedef unsigned char u8;
@@ -31,6 +35,26 @@ enum Direction {
   DIRECTION_COUNT = 8
 };
 
+// The scale of the integer evaluation values, determines the precision
+// possible when computing evaluation results. 
+#define EVAL_SCALE 1000
+
+#define DRAW_EVAL 0              // any draw
+#define M0  (-9999 * EVAL_SCALE) // mate in 0
+#define MRS (9000 * EVAL_SCALE)  // where the mate range starts in positive eval
+
+/// Retrieves the amount of moves until mate from the evaluation score, or 0 if no mate was found.
+#define COUNT_MATE_IN_PLY(eval) ((eval < 0 ? -eval : eval) > MRS ? (-M0 - (eval < 0 ? -eval : eval)) : 0)
+#define MATE_IN_PLY(moves)       (M0 + moves)
+
+constexpr inline f32 fEval(i32 eval) {
+  return eval / (EVAL_SCALE * (float)1);
+}
+
+constexpr inline i32 iEval(f32 eval) {
+  return (i32)(eval * EVAL_SCALE);
+}
+
 // constexpr ternary solution using force inlined lambdas
 // and a constexpr if statement
 #define CONSTEXPR_TERNARY(cond, ifTrue, ifFalse) ([&]() __attribute__((always_inline)) { \
@@ -40,3 +64,8 @@ enum Direction {
             return (ifFalse); \
           } \
         }()) \
+
+// used in constexpr lookup table gen
+constexpr u64 _pdep_runtime64(u64 x, u64 m) {
+  return 4;
+}

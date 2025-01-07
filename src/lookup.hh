@@ -134,10 +134,11 @@ struct PrecalcKingAttackBBs {
 };
 
 /// Pre-calculated bitboards for straight sliding attacks per square without accounting for blockers
-struct PrecalcUnobstructedStraightSlidingAttackBBs {
+struct PrecalcUnobstructedRookSlidingAttackBBs {
     Bitboard values[64];
+    Bitboard blockerMasks[64];
 
-    constexpr PrecalcUnobstructedStraightSlidingAttackBBs() : values() {
+    constexpr PrecalcUnobstructedRookSlidingAttackBBs() : values(), blockerMasks() {
         for (u8 file = 0; file < 8; file++) {
             for (u8 rank = 0; rank < 8; rank++) {
                 u8 index = file + rank * 8;
@@ -145,56 +146,88 @@ struct PrecalcUnobstructedStraightSlidingAttackBBs {
                 Bitboard bb = /* rank */ (BITBOARD_RANK0_MASK << (rank * 8)) | /* file */ (BITBOARD_FILE0_MASK << file);
                 bb &= ~(1ULL << index); // exclude own square
                 values[index] = bb;
+
+                Bitboard blockerMask = /* rank */ (BITBOARD_RANK0_27_MASK << (rank * 8)) | /* file */ (BITBOARD_FILE0_27_MASK << file);
+                blockerMask &= ~(1ULL << index); // exclude own square
+                blockerMasks[index] = blockerMask;
             }
         }
     }
 };
 
 /// Pre-calculated bitboards for diagonal sliding attacks per square without account for blockers
-struct PrecalcUnobstructedDiagonalSlidingAttackBBs {
+struct PrecalcUnobstructedBishopSlidingAttackBBs {
     Bitboard values[64];
+    Bitboard blockerMasks[64];
 
-    constexpr PrecalcUnobstructedDiagonalSlidingAttackBBs() : values() {
+    constexpr PrecalcUnobstructedBishopSlidingAttackBBs() : values(), blockerMasks() {
         for (u8 file = 0; file < 8; file++) {
             for (u8 rank = 0; rank < 8; rank++) {
                 u8 index = file + rank * 8;
 
                 Bitboard bb = 0;
+                Bitboard blockerMask = 0;
                 int x = 0, y = 0;
 
-                x = file + 1; y = rank + 1;
-                while (x < 8 && y < 8)
-                {
+                /* NE */ {
+                    x = file; y = rank;
+                    while (x < 6 && y < 6)
+                    {
+                        u8 index = INDEX(x, y);
+                        bb |= (1ULL << index);
+                        blockerMask |= (1ULL << index);
+                        x++; y++;
+                    }
+
                     u8 index = INDEX(x, y);
                     bb |= (1ULL << index);
-                    x++; y++;
                 }
 
-                x = file + 1; y = rank - 1;
-                while (x < 8 && y >= 0)
-                {
+                /* SE */ {
+                    x = file; y = rank;
+                    while (x < 6 && y >= 1)
+                    {
+                        u8 index = INDEX(x, y);
+                        bb |= (1ULL << index);
+                        blockerMask |= (1ULL << index);
+                        x++; y--;
+                    }
+
                     u8 index = INDEX(x, y);
                     bb |= (1ULL << index);
-                    x++; y--;
                 }
 
-                x = file - 1; y = rank + 1;
-                while (x >= 0 && y < 8)
-                {
+                /* NW */ {
+                    x = file; y = rank;
+                    while (x >= 1 && y < 6)
+                    {
+                        u8 index = INDEX(x, y);
+                        bb |= (1ULL << index);
+                        blockerMask |= (1ULL << index);
+                        x--; y++;
+                    }
+
                     u8 index = INDEX(x, y);
                     bb |= (1ULL << index);
-                    x--; y++;
                 }
 
-                x = file - 1; y = rank - 1;
-                while (x >= 0 && y >= 0)
-                {
+                /* SW */ {
+                    x = file; y = rank;
+                    while (x >= 1 && y >= 1)
+                    {
+                        u8 index = INDEX(x, y);
+                        bb |= (1ULL << index);
+                        blockerMask |= (1ULL << index);
+                        x--; y--;
+                    }
+
                     u8 index = INDEX(x, y);
                     bb |= (1ULL << index);
-                    x--; y--;
                 }
 
-                values[index] = bb;
+                Bitboard clearSelfSq = ~(1ULL << index);
+                values[index] = bb & clearSelfSq;
+                blockerMasks[index] = blockerMask & clearSelfSq;
             }
         }
     }
@@ -204,9 +237,137 @@ extern const PrecalcDistanceFromEdge precalcDistanceFromEdge;
 extern const PrecalcPawnAttackBBs precalcPawnAttackBBs;
 extern const PrecalcKnightAttackBBs precalcKnightAttackBBs;
 extern const PrecalcKingAttackBBs precalcKingAttackBBs;
-extern const PrecalcUnobstructedStraightSlidingAttackBBs precalcUnobstructedStraightSlidingAttackBBs;
-extern const PrecalcUnobstructedDiagonalSlidingAttackBBs precalcUnobstructedDiagonalSlidingAttackBBs;
+extern const PrecalcUnobstructedRookSlidingAttackBBs precalcUnobstructedRookAttackBBs;
+extern const PrecalcUnobstructedBishopSlidingAttackBBs precalcUnobstructedBishopAttackBBs;
+
+/* ------------- Lookup using PEXT instructions ------------- */
+namespace __pext {
+
+inline u64 rook_attack_key(u8 index, u64 blockers) {
+    Bitboard mask = precalcUnobstructedRookAttackBBs.blockerMasks[index];
+    return _pext_u64(blockers, mask);
+}
+
+inline u64 bishop_attack_key(u8 index, u64 blockers) {
+    Bitboard mask = precalcUnobstructedBishopAttackBBs.blockerMasks[index];
+    return _pext_u64(blockers, mask);
+}
+
+/// Pre-calculated bitboards per blockers by mask per square.
+struct PrecalcRookAttackBBs {
+    Bitboard values[64][1024];
+
+    constexpr PrecalcRookAttackBBs() : values() {
+        for (u8 index = 0; index < 64; index++) {
+            u8 file = FILE(index); u8 rank = RANK(index);
+
+            // extract blocker mask and gen info
+            Bitboard mask = precalcUnobstructedRookAttackBBs.blockerMasks[index];
+            u8 blockerCount = _popcount64(mask);
+
+            // use pdep to gen blockers from numbers
+            for (u64 key = 0; key < (1 << blockerCount); key++) {
+                Bitboard blockers = _pdep_runtime64(key, mask);
+                Bitboard bb = 0;
+                u8 x = file, y = rank;
+
+                for (x = file; x < 7; x++) {
+                    u8 index = INDEX(x, y);
+                    bb |= 1ULL << index;
+                    if ((blockers & (1ULL << index)) > 1) break;
+                }
+
+                for (x = file; x >= 0; x--) {
+                    u8 index = INDEX(x, y);
+                    bb |= 1ULL << index;
+                    if ((blockers & (1ULL << index)) > 1) break;
+                }
+
+                for (x = file, y = rank; y < 7; y++) {
+                    u8 index = INDEX(x, y);
+                    bb |= 1ULL << index;
+                    if ((blockers & (1ULL << index)) > 1) break;
+                }
+
+                for (x = file, y = rank; y >= 0; y--) {
+                    u8 index = INDEX(x, y);
+                    bb |= 1ULL << index;
+                    if ((blockers & (1ULL << index)) > 1) break;
+                }
+            }
+        }
+    }
+};
+
+/// Pre-calculated bitboards per blockers by mask per square.
+struct PrecalcBishopAttackBBs {
+    Bitboard values[64][1024];
+
+    constexpr PrecalcBishopAttackBBs() : values() {
+        for (u8 index = 0; index < 64; index++) {
+            u8 file = FILE(index); u8 rank = RANK(index);
+
+            // extract blocker mask and gen info
+            Bitboard mask = precalcUnobstructedBishopAttackBBs.blockerMasks[index];
+            u8 blockerCount = _popcount64(mask);
+
+            // use pdep to gen blockers from numbers
+            for (u64 key = 0; key < (1 << blockerCount); key++) {
+                Bitboard blockers = _pdep_runtime64(key, mask);
+                Bitboard bb = 0;
+                u8 x = file, y = rank;
+
+                for (x = file, y = rank; x < 7 && y < 7; x++, y++) {
+                    u8 index = INDEX(x, y);
+                    bb |= 1ULL << index;
+                    if ((blockers & (1ULL << index)) > 1) break;
+                }
+
+                for (x = file, y = rank; x >= 0 && y < 7; x--, y++) {
+                    u8 index = INDEX(x, y);
+                    bb |= 1ULL << index;
+                    if ((blockers & (1ULL << index)) > 1) break;
+                }
+
+                for (x = file, y = rank; x >= 0 && y >= 0; x--, y--) {
+                    u8 index = INDEX(x, y);
+                    bb |= 1ULL << index;
+                    if ((blockers & (1ULL << index)) > 1) break;
+                }
+
+                for (x = file, y = rank; x >= 0 && y < 7; x--, y++) {
+                    u8 index = INDEX(x, y);
+                    bb |= 1ULL << index;
+                    if ((blockers & (1ULL << index)) > 1) break;
+                }
+            }
+        }
+    }
+};
+
+extern const PrecalcRookAttackBBs rookAttackBBs;     // should be ~64 kb
+extern const PrecalcBishopAttackBBs bishopAttackBBs;
+
+inline Bitboard rook_attack_bb(u8 index, u64 blockers) {
+    return rookAttackBBs.values[index][rook_attack_key(index, blockers)];
+}
+
+inline Bitboard bishop_attack_bb(u8 index, u64 blockers) {
+    return bishopAttackBBs.values[index][bishop_attack_key(index, blockers)];
+}
+
+}
 
 // todo: PEXT/magic bb precalc for sliders
+
+/*
+    Select lookup/magic type
+*/
+
+#ifndef TC_LOOKUP_TYPE
+#define TC_LOOKUP_TYPE pext
+#endif
+
+namespace magic = CONCAT(__, TC_LOOKUP_TYPE);
 
 }

@@ -49,5 +49,6 @@
         "__config": "cpp",
         "iomanip": "cpp",
         "sstream": "cpp"
-    }
+    },
+    "editor.formatOnSave": false
 }

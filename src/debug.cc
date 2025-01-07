@@ -27,17 +27,13 @@ void tc::debug_tostr_bitboard(std::ostringstream& oss, u64 bb, BitboardToStrOpti
     oss <<                     "     A   B   C   D   E   F   G   H" << std::endl;
 }
 
-void tc::debug_tostr_move(std::ostringstream& oss, Move move) {
-    oss << pieceToChar(move.piece) << " ";
+void tc::debug_tostr_move(std::ostringstream& oss, Board& b, Move move) {
+    oss << move.moved_piece(&b) << " ";
     oss << FILE_TO_CHAR(FILE(move.src)) << RANK_TO_CHAR(RANK(move.src));
     oss << FILE_TO_CHAR(FILE(move.dst)) << RANK_TO_CHAR(RANK(move.dst));
-    if (move.captured != NULL_PIECE) oss << " x" << pieceToChar(move.captured);
-    if (move.isCheck) oss << " #";
-    if (move.promotionType != NULL_PIECE_TYPE) oss << " =" << typeToCharLowercase[move.promotionType];
-    if (move.enPassant) oss << " ep";
-    if ((move.castleOperations & CASTLED_L)) oss << " O-O-O";
-    if ((move.castleOperations & CASTLED_R)) oss << " O-O";
-
-    if ((move.castleOperations & CAN_CASTLE_R)) oss << " ~cK";
-    if ((move.castleOperations & CAN_CASTLE_L)) oss << " -cQ";
+    if (move.captured_piece(&b) != NULL_PIECE) oss << " x" << pieceToChar(move.captured_piece(&b));
+    if (move.is_promotion()) oss << " =" << typeToCharLowercase[move.promotion_piece()];
+    if (move.is_en_passant()) oss << " ep";
+    if (move.is_castle_left()) oss << " O-O-O";
+    if (move.is_castle_right()) oss << " O-O";
 }

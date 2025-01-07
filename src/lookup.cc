@@ -7,7 +7,14 @@ extern constexpr PrecalcDistanceFromEdge precalcDistanceFromEdge { };
 extern constexpr PrecalcPawnAttackBBs precalcPawnAttackBBs { };
 extern constexpr PrecalcKnightAttackBBs precalcKnightAttackBBs { };
 extern constexpr PrecalcKingAttackBBs precalcKingAttackBBs { };
-extern constexpr PrecalcUnobstructedStraightSlidingAttackBBs precalcUnobstructedStraightSlidingAttackBBs { };
-extern constexpr PrecalcUnobstructedDiagonalSlidingAttackBBs precalcUnobstructedDiagonalSlidingAttackBBs { };
+extern constexpr PrecalcUnobstructedRookSlidingAttackBBs precalcUnobstructedRookAttackBBs { };
+extern constexpr PrecalcUnobstructedBishopSlidingAttackBBs precalcUnobstructedBishopAttackBBs { };
+
+namespace __pext {
+
+extern constexpr PrecalcRookAttackBBs precalcRookAttackBBs { };
+extern constexpr PrecalcBishopAttackBBs precalcBishopAttackBBs { };
+
+}
 
 }

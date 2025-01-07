@@ -5,10 +5,16 @@ namespace tc {
 #include "types.hh"
 #include <stdlib.h>
 
-/// @brief The player color MASK
+/// @brief The boolean color of a player
 enum Color {
-    BLACK      = 0 << 4, 
-    WHITE      = 1 << 4,
+    BLACK = 0,
+    WHITE = 1
+};
+
+/// @brief The player color part of the piece union
+enum PieceColor {
+    BLACK_PIECE = 0 << 4, 
+    WHITE_PIECE = 1 << 4,
 };
 
 /// @brief The type of piece, 
@@ -73,6 +79,7 @@ typedef u8 Piece;
 #define COLOR_OF_PIECE(p) (Color)(p & COLOR_MASK)
 #define IS_WHITE_PIECE(p) (bool)((p & COLOR_MASK) > 0)
 #define TYPE_OF_PIECE(p)  (PieceType)(p & TYPE_MASK)
+#define PIECE_COLOR_FOR(b) (WHITE * (b))                            // Piece color value for boolean color
 
 inline char pieceToChar(Piece p) {
     char typeChar = typeToCharLowercase[TYPE_OF_PIECE(p)];
@@ -82,6 +89,13 @@ inline char pieceToChar(Piece p) {
 inline const char* pieceToUnicode(Piece p) {
     return typeAndColorToIcon[TYPE_OF_PIECE(p) * (1 + IS_WHITE_PIECE(p))];
 }
+
+// Material Values
+constexpr i32 materialValuePawn   = iEval(1.0);
+constexpr i32 materialValueKnight = iEval(3.0);
+constexpr i32 materialValueBishop = iEval(3.0);
+constexpr i32 materialValueRook   = iEval(5.0);
+constexpr i32 materialValueQueen  = iEval(9.0);
 
 static u16 materialValuePerType[] = {
     100, // Pawn

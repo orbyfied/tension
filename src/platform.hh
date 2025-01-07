@@ -1,8 +1,19 @@
 #pragma once
 
+#include <bit>
+#include <immintrin.h>
+
 #include "types.hh"
 
+// Compiler
+#if defined(__clang__)
+
+#define _forceinline __attribute__((always_inline))
+
+#endif
+
 // Architecture
+#if defined(__clang__) || defined(__gcc__)
 
 // ctz (count trailing zeroes), clz (count leading zeroes)
 #define _ctz64(x) (__builtin_ctzll(x))
@@ -13,21 +24,21 @@
 #define _clz8(x) (__builtin_clz((u32)(x) << /* shl to move to start for leading zero cnt */ 24))
 
 // csb (count set bits AKA popcount), czb (count zero bits AKA width - popcount)
-#define _csb64(x) (__builtin_popcountll(x))
-#define _csb32(x) (__builtin_popcount(x))
-#define _csb8(x)  (__builtin_popcount(x))
-#define _czb64(x) (64 - __builtin_popcountll(x))
-#define _czb32(x) (32 - __builtin_popcount(x))
-#define _czb8(x)  (8 - __builtin_popcount(x))
+#define _popcount64(x) (__builtin_popcountll(x))
+#define _popcount32(x) (__builtin_popcount(x))
+#define _popcount8(x)  (__builtin_popcount(x))
+#define _zcount64(x) (64 - __builtin_popcountll(x))
+#define _zcount32(x) (32 - __builtin_popcount(x))
+#define _zcount8(x)  (8 - __builtin_popcount(x))
 
-// mbe (masked bit extract AKA pext), mbd (masked bit deposit AKA pdep)
-#define _mbe(src, mask, dst) 
-#define _mbd(src, mask, dst) 
+#define _pext(src, mask) _pext_u64(src, mask) 
+#define _pdep(src, mask) _pdep_u64(src, mask)
 
-// Compiler
-#if defined(__clang__)
-
-#define _forceinline __attribute__((always_inline))
+inline u8 _pop_lsb(u64& i) {
+    const u8 idx = _ctz64(i);
+    i &= i - 1;
+    return idx;
+}
 
 #endif
 
