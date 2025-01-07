@@ -48,7 +48,8 @@
         "algorithm": "cpp",
         "__config": "cpp",
         "iomanip": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "iterator": "cpp"
     },
     "editor.formatOnSave": false
 }

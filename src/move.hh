@@ -24,13 +24,13 @@ namespace tc {
 #define MOVE_DOUBLE_PUSH    0x8
 
 enum MobilityType {
-    PAWN_MOBILITY,
-    KNIGHT_MOBILITY,
-    DIAGONAL,
-    STRAIGHT,
-    QUEEN_MOBILITY,
+    PAWN_MOBILITY = PAWN,
+    KNIGHT_MOBILITY = KNIGHT,
+    DIAGONAL = BISHOP,
+    STRAIGHT = ROOK,
+    QUEEN_MOBILITY = QUEEN,
 
-    MOBILITY_TYPE_COUNT
+    MOBILITY_TYPE_COUNT = NULL_PIECE_TYPE
 };
 
 #define INDEX(file, rank) ((rank) * 8 + (file))
@@ -67,20 +67,20 @@ struct Board;
 
 /// @brief All data about a move 
 struct Move {
-    static inline Move make(u8 src, u8 dst) { return { .src = src, .dst = dst }; }
-    static inline Move make(u8 src, u8 dst, u8 flags) { return { .src = src, .dst = dst, .flags = flags }; }
-    static inline Move make_en_passant(u8 src, u8 dst) { return { .src = src, .dst = dst, .flags = MOVE_EN_PASSANT }; }
-    static inline Move make_castle_left(u8 src, u8 dst) { return { .src = src, .dst = dst, .flags = MOVE_CASTLE_LEFT }; }
-    static inline Move make_castle_right(u8 src, u8 dst) { return { .src = src, .dst = dst, .flags = MOVE_CASTLE_RIGHT }; }
-    static inline Move make_double_push(u8 src, u8 dst) { return { .src = src, .dst = dst, .flags = MOVE_EN_PASSANT }; }
+    static inline Move make(Sq src, Sq dst) { return { .src = src, .dst = dst }; }
+    static inline Move make(Sq src, Sq dst, u8 flags) { return { .src = src, .dst = dst, .flags = flags }; }
+    static inline Move make_en_passant(Sq src, Sq dst) { return { .src = src, .dst = dst, .flags = MOVE_EN_PASSANT }; }
+    static inline Move make_castle_left(Sq src, Sq dst) { return { .src = src, .dst = dst, .flags = MOVE_CASTLE_LEFT }; }
+    static inline Move make_castle_right(Sq src, Sq dst) { return { .src = src, .dst = dst, .flags = MOVE_CASTLE_RIGHT }; }
+    static inline Move make_double_push(Sq src, Sq dst) { return { .src = src, .dst = dst, .flags = MOVE_DOUBLE_PUSH }; }
 
     // The source and destination indices
-    u8 src : 6;
-    u8 dst : 6;
+    Sq src : 6;
+    Sq dst : 6;
     // The additional move flags
     u8 flags : 4 = 0;
 
-    inline bool isNull() const { return src == 0 && dst == 0; }
+    inline bool null() const { return src == 0 && dst == 0; }
 
     inline u8 source() const { return src; }
     inline u8 destination() const { return dst; }

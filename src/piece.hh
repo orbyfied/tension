@@ -5,12 +5,6 @@ namespace tc {
 #include "types.hh"
 #include <stdlib.h>
 
-/// @brief The boolean color of a player
-enum Color {
-    BLACK = 0,
-    WHITE = 1
-};
-
 /// @brief The player color part of the piece union
 enum PieceColor {
     BLACK_PIECE = 0 << 4, 
@@ -28,6 +22,8 @@ enum PieceType {
 
     NULL_PIECE_TYPE = 6,
 };
+
+#define PIECE_TYPE_COUNT (NULL_PIECE_TYPE)
 
 static const char* typeToName[] = {
     "Pawn",
@@ -76,10 +72,10 @@ typedef u8 Piece;
 
 #define SIDE_OF_COLOR(c) ((int)(-1 + (c > 0) * 2))                // Returns -1 for black, 1 for white
 #define SIDE_OF_PIECE(p) ((int)(-1 + ((p & COLOR_MASK) > 0) * 2)) // Returns -1 for black, 1 for white
-#define COLOR_OF_PIECE(p) (Color)(p & COLOR_MASK)
-#define IS_WHITE_PIECE(p) (bool)((p & COLOR_MASK) > 0)
+#define COLOR_OF_PIECE(p) (PieceColor)(p & COLOR_MASK)
+#define IS_WHITE_PIECE(p) (Color)((p & COLOR_MASK) > 0)
 #define TYPE_OF_PIECE(p)  (PieceType)(p & TYPE_MASK)
-#define PIECE_COLOR_FOR(b) (WHITE * (b))                            // Piece color value for boolean color
+#define PIECE_COLOR_FOR(b) (WHITE_PIECE * (b))                            // Piece color value for boolean color
 
 inline char pieceToChar(Piece p) {
     char typeChar = typeToCharLowercase[TYPE_OF_PIECE(p)];
@@ -91,21 +87,20 @@ inline const char* pieceToUnicode(Piece p) {
 }
 
 // Material Values
-constexpr i32 materialValuePawn   = iEval(1.0);
-constexpr i32 materialValueKnight = iEval(3.0);
-constexpr i32 materialValueBishop = iEval(3.0);
-constexpr i32 materialValueRook   = iEval(5.0);
-constexpr i32 materialValueQueen  = iEval(9.0);
+constexpr i32 evalValuePawn   = iEval(1.0);
+constexpr i32 evalValueKnight = iEval(3.0);
+constexpr i32 evalValueBishop = iEval(3.0);
+constexpr i32 evalValueRook   = iEval(5.0);
+constexpr i32 evalValueQueen  = iEval(9.0);
 
 static u16 materialValuePerType[] = {
-    100, // Pawn
-    300, // Knight
-    300, // Bishop
-    500, // Rook
-    800, // Queen
-    0,   // King
-    0,   // COUNT
-    0,   // NULL
+    1, // Pawn
+    3, // Knight
+    3, // Bishop
+    5, // Rook
+    8, // Queen
+    0, // King
+    0, // NULL aka COUNT
 };
 
 }

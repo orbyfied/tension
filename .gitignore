@@ -2,3 +2,8 @@
 zig-out/
 .idea/
 .vscode/
+
+# debug files
+src/*.exe
+src/*.o
+src/*.obj

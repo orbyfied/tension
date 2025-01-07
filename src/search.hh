@@ -85,7 +85,7 @@ struct SearchManager {
 
     /// @brief Search the current position to the given fixed depth
     /// @param state The search state
-    template<StaticSearchOptions const& _SearchOptions, bool turn, bool leaf /* depth = 0 */>
+    template<StaticSearchOptions const& _SearchOptions, Color turn, bool leaf /* depth = 0 */>
     MoveResult search_fixed_internal_sync(SearchState<_SearchOptions>* state, ThreadSearchState<_SearchOptions>* threadState, 
                                           i32 alpha, i32 beta, u16 maxDepth, u16 depthRemaining) {
         if constexpr (_SearchOptions.debugMetrics) {
@@ -111,7 +111,7 @@ struct SearchManager {
         i32 legalMoves = 0;
         for (int i = 0; i < moveList.reserved + moveList.count; i++) {
             Move move = moveList.moves[i];
-            if (move.isNull()) continue;
+            if (move.null()) continue;
 
             if constexpr (_SearchOptions.debugMetrics) {
                 if (move.captured_piece(board) != NULL_PIECE) {

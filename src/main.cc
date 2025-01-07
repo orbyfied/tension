@@ -5,71 +5,97 @@
 #include <io.h>
 #include <fcntl.h>
 
-#include "board.hh"
 #include "debug.hh"
+#include "board.hh"
 #include "search.hh"
 
 using namespace tc;
 
-int perft(Board* board, int depth) {
-    if (depth == 0) {
-        return 0;
-    }
-
-    int count = 0;
-    MoveList<NoOrderMoveOrderer, 128, false> moveList;
-    std::cout << "a" << std::endl;
-    // gen_pseudo_legal_moves(board, board->whiteTurn, &moveList);
-    count += moveList.count;
-    
-    // for each node, perft more moves
-    for (int i = 0; i < moveList.count; i++) {
-        ExtMove<true> extMove(moveList.moves[i]);
-        board->make_move_unchecked<true>(&extMove);
-        count += perft(board, depth - 1);
-        board->unmake_move_unchecked<true>(&extMove);
-    }
-
-    return depth;
-}
-
 int main() {
-    std::setlocale(LC_CTYPE, ".UTF-8");
+    Board b;
+    // b.set_piece<true>(fC | r4, WHITE_PIECE | ROOK);
+    // b.set_piece<true>(fH | r4, WHITE_PIECE | ROOK);
+    // b.set_piece<true>(fD | r3, WHITE_PIECE | PAWN);
+    // b.set_piece<true>(fA | r7, WHITE_PIECE | KNIGHT);
+    // b.set_piece<true>(fB | r5, BLACK_PIECE | KNIGHT);
+    // b.set_piece<true>(fB | r4, BLACK_PIECE | QUEEN);
+    // b.set_piece<true>(fE | r1, BLACK_PIECE | PAWN);
+    b.set_piece<true>(fA | r2, WHITE_PIECE | PAWN);
+    b.set_piece<true>(fC | r3, WHITE_PIECE | PAWN);
+    b.set_piece<true>(fB | r2, WHITE_PIECE | PAWN);
+    b.set_piece<true>(fB | r3, BLACK_PIECE | PAWN);
+    b.set_piece<true>(fH | r7, WHITE_PIECE | PAWN);
+    b.set_piece<true>(fD | r8, BLACK_PIECE | PAWN);
+    b.set_piece<true>(fE | r7, WHITE_PIECE | PAWN);
 
-    struct timeval timev;
-    gettimeofday(&timev, NULL);
-    srand(timev.tv_sec ^ timev.tv_usec);
-
-    Board board;
-
-    /* =============================================================== */
-
-    board.set_piece<true>(fC | r3, BLACK_PIECE | PAWN);   // add pawn before bishop, info on this pawn
-    board.set_piece<true>(fF | r6, WHITE_PIECE | BISHOP); // add bishop
-    board.set_piece<true>(fF | r5, BLACK_PIECE | PAWN);   // add second pawn, bishop attack must be blocked
-    board.set_piece<true>(fC | r5, WHITE_PIECE | ROOK);   // add rook, has info on both pawns
-    board.set_piece<true>(fC | r7, BLACK_PIECE | PAWN);   // add third pawn, bishop and rook attacks must be blocked
-
-    // debug bitboards
     std::ostringstream oss;
-    oss << "\n";
-    BitboardToStrOptions strOptions;
-    strOptions.highlightChars[fC | r7] = '3';
-    strOptions.highlightChars[fF | r5] = '2';
-    strOptions.highlightChars[fC | r3] = '1';
-    debug_tostr_bitboard(oss, BITBOARD_FILE_RANGE_MASK(1, 5), strOptions);
-    oss << "\n\n";
-    debug_tostr_board(oss, board, { });
-    std::cout << oss.str();
+    debug_tostr_board(oss, b, { });
 
-    // Handled In Movegen:
-    // x castling
-    // x checks
-    // x rook movegen    } queen movegen
-    // x bishop movegen  } 
-    
-    // Handled During Search:
-    // - pins
-    // - check blocking
-    // - check for attacks on castling squares (maybe attacked squares bb usable for checks asw?)
+    MoveList<BasicScoreMoveOrderer, 1024, false> moveList;
+    gen_all_moves<decltype(moveList), defaultFullyLegalMovegenOptions, WHITE>(&b, &moveList);
+
+    oss << "\n\nGenerated " << moveList.count << " moves for white:";
+    for (int i = moveList.count - 1; i >= 0; i--) {
+        Move move = moveList.moves[i];
+        if (move.null()) continue;
+
+        oss << "\n[" << i << "]";
+        debug_tostr_move(oss, b, move);
+        oss << "  -  " << moveList.scores[i];
+    }
+
+    std::cout << oss.str() << std::endl;
+
+    // struct timeval tv;
+    // gettimeofday(&tv, NULL);
+    // srand((tv.tv_sec) * 1000ULL + tv.tv_usec);
+
+    // char hl[64];
+    // float blockersDensity = 0.6f;
+
+    // if (true) {
+    //     u8 rookIndex = rand() % 64;
+    //     u64 blockers = bitwise_random_64(blockersDensity);
+    //     blockers &= ~(1ULL << rookIndex);
+
+    //     std::ostringstream oss;
+    //     oss << "Rook index: " << (int)rookIndex << " (x" << (int)FILE(rookIndex) << " y" << (int)RANK(rookIndex) << ")\n\n";
+    //     oss << "Blockers with rook highlighted: " << "\n";
+    //     memset(&hl, 0, 64);
+    //     hl[rookIndex] = '.';
+    //     debug_tostr_bitboard(oss, blockers, { .highlightChars = (char*)&hl });
+
+    //     oss << "\n\nAttack bitboard: \n";
+    //     u64 bc = blockers;
+    //     while (bc) {
+    //         hl[_pop_lsb(bc)] = 219;
+    //     }
+    //     Bitboard bb = tc::lookup::magic::rook_attack_bb(rookIndex, blockers);
+    //     debug_tostr_bitboard(oss, bb, { .highlightChars = (char*)&hl });
+
+    //     std::cout << oss.str() << std::endl;
+    // }
+
+    // if (true) {
+    //     u8 bishopIndex = rand() % 64;
+    //     u64 blockers = bitwise_random_64(blockersDensity);
+    //     blockers &= ~(1ULL << bishopIndex);
+
+    //     std::ostringstream oss;
+    //     oss << "Bishop index: " << (int)bishopIndex << " (x" << (int)FILE(bishopIndex) << " y" << (int)RANK(bishopIndex) << ")\n\n";
+    //     oss << "Blockers with bishop highlighted: " << "\n";
+    //     memset(&hl, 0, 64);
+    //     hl[bishopIndex] = '.';
+    //     debug_tostr_bitboard(oss, blockers, { .highlightChars = (char*)&hl });
+
+    //     oss << "\n\nAttack bitboard: \n";
+    //     u64 bc = blockers;
+    //     while (bc) {
+    //         hl[_pop_lsb(bc)] = 219;
+    //     }
+    //     Bitboard bb = tc::lookup::magic::bishop_attack_bb(bishopIndex, blockers);
+    //     debug_tostr_bitboard(oss, bb, { .highlightChars = (char*)&hl });
+
+    //     std::cout << "\n\n" << oss.str() << std::endl;
+    // }
 }

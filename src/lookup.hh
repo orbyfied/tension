@@ -2,6 +2,7 @@
 
 #include "bitboard.hh"
 #include "move.hh"
+#include "constexpr.hh"
 
 /*
     Lookups used for movegen, tracking attacks and checks, fast distance calculations,
@@ -25,7 +26,7 @@ struct PrecalcDistanceFromEdge {
     constexpr PrecalcDistanceFromEdge() : values() {
         for (int file = 0; file < 8; file++) {
             for (int rank = 0; rank < 8; rank++) {
-                u8 index = rank * 8 + file;
+                Sq index = rank * 8 + file;
 
                 // straight directions
                 values[index][NORTH] = 7 - rank;
@@ -64,7 +65,7 @@ struct PrecalcPawnAttackBBs {
                 }
 
                 for (u8 rank = (color ? 0 : 1); rank < (color ? 7 : 8); rank++) {
-                    u8 index = file + rank * 8;
+                    Sq index = file + rank * 8;
 
                     // create bitboard
                     Bitboard bb = 0;
@@ -86,7 +87,7 @@ struct PrecalcKnightAttackBBs {
     constexpr PrecalcKnightAttackBBs() : values() {
         for (u8 file = 0; file < 8; file++) {
             for (u8 rank = 0; rank < 8; rank++) {
-                u8 index = file + rank * 8;
+                Sq index = file + rank * 8;
 
                 // create bitboard
                 Bitboard bb = 0;
@@ -113,7 +114,7 @@ struct PrecalcKingAttackBBs {
     constexpr PrecalcKingAttackBBs() : values() {
         for (u8 file = 0; file < 8; file++) {
             for (u8 rank = 0; rank < 8; rank++) {
-                u8 index = file + rank * 8;
+                Sq index = file + rank * 8;
 
                 // create bitboard
                 Bitboard bb = 0;
@@ -141,7 +142,7 @@ struct PrecalcUnobstructedRookSlidingAttackBBs {
     constexpr PrecalcUnobstructedRookSlidingAttackBBs() : values(), blockerMasks() {
         for (u8 file = 0; file < 8; file++) {
             for (u8 rank = 0; rank < 8; rank++) {
-                u8 index = file + rank * 8;
+                Sq index = file + rank * 8;
 
                 Bitboard bb = /* rank */ (BITBOARD_RANK0_MASK << (rank * 8)) | /* file */ (BITBOARD_FILE0_MASK << file);
                 bb &= ~(1ULL << index); // exclude own square
@@ -163,7 +164,7 @@ struct PrecalcUnobstructedBishopSlidingAttackBBs {
     constexpr PrecalcUnobstructedBishopSlidingAttackBBs() : values(), blockerMasks() {
         for (u8 file = 0; file < 8; file++) {
             for (u8 rank = 0; rank < 8; rank++) {
-                u8 index = file + rank * 8;
+                Sq index = file + rank * 8;
 
                 Bitboard bb = 0;
                 Bitboard blockerMask = 0;
@@ -171,43 +172,43 @@ struct PrecalcUnobstructedBishopSlidingAttackBBs {
 
                 /* NE */ {
                     x = file; y = rank;
-                    while (x < 6 && y < 6)
+                    while (x < 7 && y < 7)
                     {
-                        u8 index = INDEX(x, y);
+                        Sq index = INDEX(x, y);
                         bb |= (1ULL << index);
                         blockerMask |= (1ULL << index);
                         x++; y++;
                     }
 
-                    u8 index = INDEX(x, y);
+                    Sq index = INDEX(x, y);
                     bb |= (1ULL << index);
                 }
 
                 /* SE */ {
                     x = file; y = rank;
-                    while (x < 6 && y >= 1)
+                    while (x < 7 && y >= 1)
                     {
-                        u8 index = INDEX(x, y);
+                        Sq index = INDEX(x, y);
                         bb |= (1ULL << index);
                         blockerMask |= (1ULL << index);
                         x++; y--;
                     }
 
-                    u8 index = INDEX(x, y);
+                    Sq index = INDEX(x, y);
                     bb |= (1ULL << index);
                 }
 
                 /* NW */ {
                     x = file; y = rank;
-                    while (x >= 1 && y < 6)
+                    while (x >= 1 && y < 7)
                     {
-                        u8 index = INDEX(x, y);
+                        Sq index = INDEX(x, y);
                         bb |= (1ULL << index);
                         blockerMask |= (1ULL << index);
                         x--; y++;
                     }
 
-                    u8 index = INDEX(x, y);
+                    Sq index = INDEX(x, y);
                     bb |= (1ULL << index);
                 }
 
@@ -215,13 +216,13 @@ struct PrecalcUnobstructedBishopSlidingAttackBBs {
                     x = file; y = rank;
                     while (x >= 1 && y >= 1)
                     {
-                        u8 index = INDEX(x, y);
+                        Sq index = INDEX(x, y);
                         bb |= (1ULL << index);
                         blockerMask |= (1ULL << index);
                         x--; y--;
                     }
 
-                    u8 index = INDEX(x, y);
+                    Sq index = INDEX(x, y);
                     bb |= (1ULL << index);
                 }
 
@@ -233,67 +234,73 @@ struct PrecalcUnobstructedBishopSlidingAttackBBs {
     }
 };
 
-extern const PrecalcDistanceFromEdge precalcDistanceFromEdge;
-extern const PrecalcPawnAttackBBs precalcPawnAttackBBs;
+extern const PrecalcDistanceFromEdge distanceFromEdge;
+extern const PrecalcPawnAttackBBs pawnAttackBBs;
 extern const PrecalcKnightAttackBBs precalcKnightAttackBBs;
-extern const PrecalcKingAttackBBs precalcKingAttackBBs;
-extern const PrecalcUnobstructedRookSlidingAttackBBs precalcUnobstructedRookAttackBBs;
-extern const PrecalcUnobstructedBishopSlidingAttackBBs precalcUnobstructedBishopAttackBBs;
+extern const PrecalcKingAttackBBs kingAttackBBs;
+extern const PrecalcUnobstructedRookSlidingAttackBBs unobstructedRookAttackBBs;
+extern const PrecalcUnobstructedBishopSlidingAttackBBs unobstructedBishopAttackBBs;
 
 /* ------------- Lookup using PEXT instructions ------------- */
 namespace __pext {
 
-inline u64 rook_attack_key(u8 index, u64 blockers) {
-    Bitboard mask = precalcUnobstructedRookAttackBBs.blockerMasks[index];
+inline u64 rook_attack_key(Sq index, u64 blockers) {
+    Bitboard mask = unobstructedRookAttackBBs.blockerMasks[index];
     return _pext_u64(blockers, mask);
 }
 
-inline u64 bishop_attack_key(u8 index, u64 blockers) {
-    Bitboard mask = precalcUnobstructedBishopAttackBBs.blockerMasks[index];
+inline u64 bishop_attack_key(Sq index, u64 blockers) {
+    Bitboard mask = unobstructedBishopAttackBBs.blockerMasks[index];
     return _pext_u64(blockers, mask);
 }
+
+/// The magic tables are not marked as constexpr so the calculation is done at program start, because
+/// for some reason doing these at compile time takes extremely long.
 
 /// Pre-calculated bitboards per blockers by mask per square.
 struct PrecalcRookAttackBBs {
-    Bitboard values[64][1024];
+    Bitboard values[64][4096];
 
-    constexpr PrecalcRookAttackBBs() : values() {
-        for (u8 index = 0; index < 64; index++) {
+    PrecalcRookAttackBBs() : values() {
+        for (Sq index = 0; index < 64; index++) {
             u8 file = FILE(index); u8 rank = RANK(index);
 
             // extract blocker mask and gen info
-            Bitboard mask = precalcUnobstructedRookAttackBBs.blockerMasks[index];
+            Bitboard mask = unobstructedRookAttackBBs.blockerMasks[index];
             u8 blockerCount = _popcount64(mask);
 
             // use pdep to gen blockers from numbers
             for (u64 key = 0; key < (1 << blockerCount); key++) {
-                Bitboard blockers = _pdep_runtime64(key, mask);
+                Bitboard blockers = _pdep_u64(key, mask);
                 Bitboard bb = 0;
-                u8 x = file, y = rank;
+                int x = file, y = rank;
 
-                for (x = file; x < 7; x++) {
-                    u8 index = INDEX(x, y);
+                for (x = file; x < 8; x++) {
+                    Sq index = INDEX(x, y);
                     bb |= 1ULL << index;
                     if ((blockers & (1ULL << index)) > 1) break;
                 }
 
                 for (x = file; x >= 0; x--) {
-                    u8 index = INDEX(x, y);
+                    Sq index = INDEX(x, y);
                     bb |= 1ULL << index;
                     if ((blockers & (1ULL << index)) > 1) break;
                 }
 
-                for (x = file, y = rank; y < 7; y++) {
-                    u8 index = INDEX(x, y);
+                for (x = file, y = rank; y < 8; y++) {
+                    Sq index = INDEX(x, y);
                     bb |= 1ULL << index;
                     if ((blockers & (1ULL << index)) > 1) break;
                 }
 
                 for (x = file, y = rank; y >= 0; y--) {
-                    u8 index = INDEX(x, y);
+                    Sq index = INDEX(x, y);
                     bb |= 1ULL << index;
                     if ((blockers & (1ULL << index)) > 1) break;
                 }
+
+                bb &= ~(1ULL << index); // exclude own sq
+                values[index][key] = bb;
             }
         }
     }
@@ -301,58 +308,61 @@ struct PrecalcRookAttackBBs {
 
 /// Pre-calculated bitboards per blockers by mask per square.
 struct PrecalcBishopAttackBBs {
-    Bitboard values[64][1024];
+    Bitboard values[64][4096];
 
-    constexpr PrecalcBishopAttackBBs() : values() {
-        for (u8 index = 0; index < 64; index++) {
+    PrecalcBishopAttackBBs() : values() {
+        for (Sq index = 0; index < 64; index++) {
             u8 file = FILE(index); u8 rank = RANK(index);
 
             // extract blocker mask and gen info
-            Bitboard mask = precalcUnobstructedBishopAttackBBs.blockerMasks[index];
+            Bitboard mask = unobstructedBishopAttackBBs.blockerMasks[index];
             u8 blockerCount = _popcount64(mask);
 
             // use pdep to gen blockers from numbers
             for (u64 key = 0; key < (1 << blockerCount); key++) {
-                Bitboard blockers = _pdep_runtime64(key, mask);
+                Bitboard blockers = _pdep_u64(key, mask);
                 Bitboard bb = 0;
-                u8 x = file, y = rank;
+                int x = file, y = rank;
 
-                for (x = file, y = rank; x < 7 && y < 7; x++, y++) {
-                    u8 index = INDEX(x, y);
+                for (x = file, y = rank; x < 8 && y < 8; x++, y++) {
+                    Sq index = INDEX(x, y);
                     bb |= 1ULL << index;
                     if ((blockers & (1ULL << index)) > 1) break;
                 }
 
-                for (x = file, y = rank; x >= 0 && y < 7; x--, y++) {
-                    u8 index = INDEX(x, y);
+                for (x = file, y = rank; x >= 0 && y < 8; x--, y++) {
+                    Sq index = INDEX(x, y);
                     bb |= 1ULL << index;
                     if ((blockers & (1ULL << index)) > 1) break;
                 }
 
                 for (x = file, y = rank; x >= 0 && y >= 0; x--, y--) {
-                    u8 index = INDEX(x, y);
+                    Sq index = INDEX(x, y);
                     bb |= 1ULL << index;
                     if ((blockers & (1ULL << index)) > 1) break;
                 }
 
-                for (x = file, y = rank; x >= 0 && y < 7; x--, y++) {
-                    u8 index = INDEX(x, y);
+                for (x = file, y = rank; x < 8 && y >= 0; x++, y--) {
+                    Sq index = INDEX(x, y);
                     bb |= 1ULL << index;
                     if ((blockers & (1ULL << index)) > 1) break;
                 }
+
+                bb &= ~(1ULL << index); // exclude own sq
+                values[index][key] = bb;
             }
         }
     }
 };
 
-extern const PrecalcRookAttackBBs rookAttackBBs;     // should be ~64 kb
+extern const PrecalcRookAttackBBs rookAttackBBs;     // should be ~128 kb
 extern const PrecalcBishopAttackBBs bishopAttackBBs;
 
-inline Bitboard rook_attack_bb(u8 index, u64 blockers) {
+inline Bitboard rook_attack_bb(Sq index, u64 blockers) {
     return rookAttackBBs.values[index][rook_attack_key(index, blockers)];
 }
 
-inline Bitboard bishop_attack_bb(u8 index, u64 blockers) {
+inline Bitboard bishop_attack_bb(Sq index, u64 blockers) {
     return bishopAttackBBs.values[index][bishop_attack_key(index, blockers)];
 }
 

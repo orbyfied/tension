@@ -21,6 +21,17 @@ typedef float f32;
 typedef long double f64; 
 
 /* Basic Types */
+typedef u8 Sq;
+#define NULL_SQ ((Sq)0xFF)
+
+/// @brief The boolean color of a player
+typedef bool Color;
+
+enum : bool {
+  BLACK = 0,
+  WHITE = 1
+};
+
 enum Direction {
   NORTH = 0,
   SOUTH = 1,
@@ -34,6 +45,20 @@ enum Direction {
 
   DIRECTION_COUNT = 8
 };
+
+enum DirectionOffset : int {
+  OFF_NORTH = 8,
+  OFF_SOUTH = -8,
+  OFF_EAST  = 1,
+  OFF_WEST  = -1,
+
+  OFF_NORTH_EAST = 9,
+  OFF_NORTH_WEST = 7,
+  OFF_SOUTH_EAST = -7,
+  OFF_SOUTH_WEST = -9,
+};
+
+constexpr DirectionOffset DIRECTION_TO_OFFSET[DIRECTION_COUNT] = { OFF_NORTH, OFF_SOUTH, OFF_EAST, OFF_WEST, OFF_NORTH_EAST, OFF_NORTH_WEST, OFF_SOUTH_EAST, OFF_SOUTH_WEST };
 
 // The scale of the integer evaluation values, determines the precision
 // possible when computing evaluation results. 
@@ -64,8 +89,3 @@ constexpr inline i32 iEval(f32 eval) {
             return (ifFalse); \
           } \
         }()) \
-
-// used in constexpr lookup table gen
-constexpr u64 _pdep_runtime64(u64 x, u64 m) {
-  return 4;
-}

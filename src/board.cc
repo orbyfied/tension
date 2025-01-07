@@ -4,7 +4,7 @@ namespace tc {
 
 Board::Board() {
     // init bitboards to 0 idk if this is needed tbh
-    memset(&pieces, NULL_PIECE, 64);
+    memset(&pieceArray, NULL_PIECE, 64);
     memset(&pieceBBs, 0, 32 * sizeof(Bitboard));
     memset(&allPiecesPerColor, 0, 2 * sizeof(Bitboard));
     allPieces = 0;

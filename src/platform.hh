@@ -42,4 +42,17 @@ inline u8 _pop_lsb(u64& i) {
 
 #endif
 
+/// @brief Generate a random 64 bit number/bitboard with the given 'density' (chance of each bit being set).
+static u64 bitwise_random_64(float density) {
+    u64 res = 0;
+    for (int i = 0; i < 64; i++) {
+        float f = (float)rand() / RAND_MAX;
+        if (f < density) {
+            res |= (1ULL << i);
+        }
+    }
+
+    return res;
+}
+
 // System

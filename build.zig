@@ -42,10 +42,11 @@ const standardFlags = [_][]const u8 {
     "-std=c++23",
     "-O3",
 
+    // constexpr
+    "-fconstexpr-depth=9999", "-fconstexpr-steps=99999999",
+
     // error/warning settings
     "-Wno-deprecated-enum-enum-conversion", "-Wunused-value", "-Wno-deprecated-anon-enum-enum-conversion",
-
-    // 
 };
 
 /// Add all source files from the given directory to the compilation step

@@ -3,17 +3,18 @@
 namespace tc::lookup {
 
 // Provide all vars
-extern constexpr PrecalcDistanceFromEdge precalcDistanceFromEdge { };
-extern constexpr PrecalcPawnAttackBBs precalcPawnAttackBBs { };
+extern constexpr PrecalcDistanceFromEdge distanceFromEdge { };
+extern constexpr PrecalcPawnAttackBBs pawnAttackBBs { };
 extern constexpr PrecalcKnightAttackBBs precalcKnightAttackBBs { };
-extern constexpr PrecalcKingAttackBBs precalcKingAttackBBs { };
-extern constexpr PrecalcUnobstructedRookSlidingAttackBBs precalcUnobstructedRookAttackBBs { };
-extern constexpr PrecalcUnobstructedBishopSlidingAttackBBs precalcUnobstructedBishopAttackBBs { };
+extern constexpr PrecalcKingAttackBBs kingAttackBBs { };
+extern constexpr PrecalcUnobstructedRookSlidingAttackBBs unobstructedRookAttackBBs { };
+extern constexpr PrecalcUnobstructedBishopSlidingAttackBBs unobstructedBishopAttackBBs { };
 
 namespace __pext {
 
-extern constexpr PrecalcRookAttackBBs precalcRookAttackBBs { };
-extern constexpr PrecalcBishopAttackBBs precalcBishopAttackBBs { };
+// Not computed at compile time, instead done at program start
+extern const PrecalcRookAttackBBs rookAttackBBs { };
+extern const PrecalcBishopAttackBBs bishopAttackBBs { };
 
 }
 
