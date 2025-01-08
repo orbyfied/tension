@@ -49,7 +49,8 @@
         "__config": "cpp",
         "iomanip": "cpp",
         "sstream": "cpp",
-        "iterator": "cpp"
+        "iterator": "cpp",
+        "__assert": "cpp"
     },
     "editor.formatOnSave": false
 }

@@ -2,7 +2,7 @@
 
 using namespace tc;
 
-void tc::debug_tostr_bitboard(std::ostringstream& oss, u64 bb, BitboardToStrOptions options) {
+void tc::debug_tostr_bitboard(std::ostream& oss, u64 bb, BitboardToStrOptions options) {
     const std::string rowSep = "   +---+---+---+---+---+---+---+---+";
     oss <<                     "     A   B   C   D   E   F   G   H" << std::endl;
     oss << rowSep << "\n";
@@ -31,7 +31,7 @@ void tc::debug_tostr_bitboard(std::ostringstream& oss, u64 bb, BitboardToStrOpti
     oss <<                     "     A   B   C   D   E   F   G   H" << std::endl;
 }
 
-void tc::debug_tostr_board(std::ostringstream& oss, Board& b, BoardToStrOptions options) {
+void tc::debug_tostr_board(std::ostream& oss, Board& b, BoardToStrOptions options) {
     // collect additional info
     u64 enPassantTarget = b.volatile_state()->enPassantTarget;
 
@@ -93,11 +93,33 @@ void tc::debug_tostr_board(std::ostringstream& oss, Board& b, BoardToStrOptions 
         << ", rights: " << (state.castlingStatus[0] & CAN_CASTLE_L ? "Q" : "") << (state.castlingStatus[0] & CAN_CASTLE_R ? "K" : "") << std::endl;
 }
 
-void tc::debug_tostr_move(std::ostringstream& oss, Board& b, Move move) {
-    oss << move.moved_piece(&b) << " ";
+void tc::debug_tostr_move(std::ostream& oss, Board& b, Move move) {
+    if (move.null()) {
+        oss << "<NULL MOVE>";
+        return;
+    }
+
     oss << FILE_TO_CHAR(FILE(move.src)) << RANK_TO_CHAR(RANK(move.src));
     oss << FILE_TO_CHAR(FILE(move.dst)) << RANK_TO_CHAR(RANK(move.dst));
-    if (move.captured_piece(&b) != NULL_PIECE) oss << " x" << pieceToChar(move.captured_piece(&b));
+    if (move.is_promotion()) oss << " =" << typeToCharLowercase[move.promotion_piece()];
+    if (move.is_en_passant()) oss << " ep";
+    if (move.is_castle_left()) oss << " O-O-O";
+    if (move.is_castle_right()) oss << " O-O";
+}
+
+void tc::debug_tostr_xmove(std::ostream& oss, Board& b, ExtMove<true>* xMove) {
+    Move move = xMove->move;
+    if (move.null()) {
+        oss << "<NULL MOVE>";
+        return;
+    }
+
+    Piece p = xMove->piece;
+    oss << FILE_TO_CHAR(FILE(move.src)) << RANK_TO_CHAR(RANK(move.src));
+    oss << FILE_TO_CHAR(FILE(move.dst)) << RANK_TO_CHAR(RANK(move.dst));
+    if (xMove->captured != NULL_PIECE) oss << " x" << pieceToChar(xMove->captured);
+    bool isCheck = (b.volatile_state()->checkingSquares[!IS_WHITE_PIECE(p)][TYPE_OF_PIECE(p)] & (1ULL << move.dst)) > 1;
+    if (isCheck) oss << " #";
     if (move.is_promotion()) oss << " =" << typeToCharLowercase[move.promotion_piece()];
     if (move.is_en_passant()) oss << " ep";
     if (move.is_castle_left()) oss << " O-O-O";

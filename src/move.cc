@@ -12,7 +12,7 @@ void MoveEvalTable::alloc(i32 capacity) {
     }
 
     this->capacity = capacity;
-    this->data = (i32*) calloc(capacity, sizeof(i32));
+    this->data = (i16*) calloc(capacity, sizeof(i16));
 }
 
 void MoveEvalTable::free() {

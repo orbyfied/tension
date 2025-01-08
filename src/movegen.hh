@@ -36,7 +36,6 @@ struct MoveList {
             i16 score = _MoveOrderer::template score_move<turn>(board, move);
             
             if constexpr (useEvalTable) {
-                score *= 10;
                 score += moveEvalTable->get_adjustment(move);
             }
 
@@ -74,11 +73,13 @@ struct BasicScoreMoveOrderer {
     static i16 score_move(Board* board, Move move) {
         Piece moved = move.moved_piece(board);
         Piece captured = move.captured_piece(board);
-        return  /* capture */ (captured != NULL_PIECE) * (materialValuePerType[TYPE_OF_PIECE(captured)] * 150 - materialValuePerType[TYPE_OF_PIECE(moved)] * 100) +
-                /* promotion */ (move.is_promotion()) * 200 +
-                /* direct check */ ((board->volatile_state()->checkingSquares[!turn][TYPE_OF_PIECE(moved)] & (1ULL << move.destination())) > 1) * 500;
+        i16 promotionScore = (move.flags == MOVE_PROMOTE_QUEEN) * 750 + (move.flags == MOVE_PROMOTE_KNIGHT) * 500 + (move.flags == MOVE_PROMOTE_ROOK) * 300 + (move.flags == MOVE_PROMOTE_BISHOP) * 300;
+        return  /* capture */ (captured != NULL_PIECE) /** MAX(0, materialValuePerType[TYPE_OF_PIECE(captured)] * 200 - materialValuePerType[TYPE_OF_PIECE(moved)] * 50)*/ +
+                /* promotion */ promotionScore +
+                /* direct check */ ((board->volatile_state()->checkingSquares[!turn][TYPE_OF_PIECE(moved)] & (1ULL << move.destination())) > 1) * 500 +
+                /* en passant */ (move.is_en_passant() * 100);
     }
-};
+}; 
 
 /// @brief The compile-time movegen options
 struct StaticMovegenOptions {
@@ -110,10 +111,16 @@ void gen_all_moves(Board* board, _Consumer* consumer) {
         gen_bb_moves<_Consumer, _Options, turn, QUEEN>(board, consumer);
     }
     
-    // todo: generate king moves for this side
+    // todo: generate king moves for this sid
     if (board->kingIndexPerColor[turn] != NULL_SQ) {
         movegen_king<_Consumer, _Options, turn>(board, consumer, board->kingIndexPerColor[turn], (turn * WHITE) | KING);
     }
+}
+
+template<typename _Consumer, StaticMovegenOptions const& _Options>
+inline void gen_all_moves(Board* board, _Consumer* consumer, Color turn) {
+    if (turn) gen_all_moves<_Consumer, _Options, WHITE>(board, consumer);
+    else gen_all_moves<_Consumer, _Options, BLACK>(board, consumer);
 }
 
 /// @brief Generate all moves for the pieces which can be generated for using attack bitboards.
@@ -167,7 +174,7 @@ inline void gen_pawn_moves(Board* board, _Consumer* consumer) {
 
     constexpr DirectionOffset UpOffset = (color ? OFF_NORTH : OFF_SOUTH);
 
-    const Bitboard ourPawns = board->pieces(WHITE, PAWN);
+    const Bitboard ourPawns = board->pieces(color, PAWN);
     const Bitboard freeSquares = ~board->all_pieces();
     const Bitboard enemies = _Options.onlyEvasions ? board->checkers(color) : board->pieces_for_side(!color);
 
@@ -207,7 +214,7 @@ inline void gen_pawn_moves(Board* board, _Consumer* consumer) {
 
     capturesEast = capturesEast & ~BB_1_OR_8_RANK;
     while (capturesEast) { 
-        u8 dst = _pop_lsb(b);
+        u8 dst = _pop_lsb(capturesEast);
         consumer->template accept<color>(board, Move::make(dst - UpOffset - OFF_EAST, dst));
     }
 
@@ -217,13 +224,11 @@ inline void gen_pawn_moves(Board* board, _Consumer* consumer) {
         makePromotions(dst - UpOffset - OFF_WEST, dst);
     }
 
-    capturesEast = capturesWest & ~BB_1_OR_8_RANK;
-    while (capturesEast) { 
-        u8 dst = _pop_lsb(b);
+    capturesWest = capturesWest & ~BB_1_OR_8_RANK;
+    while (capturesWest) { 
+        u8 dst = _pop_lsb(capturesWest);
         consumer->template accept<color>(board, Move::make(dst - UpOffset - OFF_WEST, dst));
     }
-
-    std::cout << "hi3\n";
 
     // make en passant
     Sq enPassantTarget = board->volatile_state()->enPassantTarget;
@@ -238,12 +243,11 @@ inline void gen_pawn_moves(Board* board, _Consumer* consumer) {
 }
 
 template<typename _Consumer, StaticMovegenOptions const& _Options, Color color>
-inline int movegen_king(Board* board, _Consumer* consumer, Sq index, Piece p) {
-    int count = 0;
-    Bitboard friendlyBB = board->allPiecesPerColor[color];
-    Bitboard enemyBB = board->allPiecesPerColor[!color];
-    u8 file = FILE(index);
-    u8 rank = RANK(index);
+inline void movegen_king(Board* board, _Consumer* consumer, Sq index, Piece p) {
+    const Bitboard friendlyBB = board->allPiecesPerColor[color];
+    const Bitboard enemyBB = board->allPiecesPerColor[!color];
+    const u8 file = FILE(index);
+    const u8 rank = RANK(index);
 
     // king move processing //
     auto addMoveTo = [&](u8 dst) __attribute__((always_inline)) {
@@ -253,7 +257,6 @@ inline int movegen_king(Board* board, _Consumer* consumer, Sq index, Piece p) {
         if (!kingmove_check_legal<color>(board, move)) return; // discard
 
         consumer->template accept<color>(board, move);
-        count++;
     };
 
     // castling move gen //
@@ -300,13 +303,10 @@ inline int movegen_king(Board* board, _Consumer* consumer, Sq index, Piece p) {
     if (file < 7 && rank > 0) addMoveTo(index + 1 - 8);
     if (file < 7 && rank < 7) addMoveTo(index + 1 + 8);
 
-    // generate castling moves
-    u8 flags = board->volatile_state()->castlingStatus[color];
-    if ((flags & CAN_CASTLE_R) > 0) { addCastlingMove(file + 2, board->find_file_of_first_rook_on_rank<color, true>(rank), true); }
-    if ((flags & CAN_CASTLE_L) > 0) { addCastlingMove(file - 2, board->find_file_of_first_rook_on_rank<color, false>(rank), false); }
-
-    // todo: castling
-    return count;
+    // // generate castling moves
+    // u8 flags = board->volatile_state()->castlingStatus[color];
+    // if ((flags & CAN_CASTLE_R) > 0) { addCastlingMove(file + 2, board->find_file_of_first_rook_on_rank<color, true>(rank), true); }
+    // if ((flags & CAN_CASTLE_L) > 0) { addCastlingMove(file - 2, board->find_file_of_first_rook_on_rank<color, false>(rank), false); }
 }
 
 template<Color color>
@@ -314,11 +314,12 @@ inline bool kingmove_check_legal(Board* board, Move move) {
     // check moving into attack from other king
     u8 otherKingIndex = board->kingIndexPerColor[!color];
     u8 kingIndex = move.dst;
-    if (FILE(kingIndex) >= FILE(otherKingIndex) - 1 && FILE(kingIndex) <= FILE(otherKingIndex) + 1 &&
-        RANK(kingIndex) >= RANK(otherKingIndex) - 1 && RANK(kingIndex) <= RANK(otherKingIndex) + 1) return false; 
+    if ((otherKingIndex >= kingIndex + OFF_NORTH + OFF_WEST && otherKingIndex <= kingIndex + OFF_NORTH + OFF_EAST) ||
+        (otherKingIndex >= kingIndex + OFF_WEST && otherKingIndex <= kingIndex + OFF_EAST) ||
+        (otherKingIndex >= kingIndex + OFF_SOUTH + OFF_WEST && otherKingIndex <= kingIndex + OFF_SOUTH + OFF_EAST)) return false; 
 
     // check moving into attack
-    return (board->volatile_state()->attackBBsPerColor[!color] & (1ULL << kingIndex)) < 1;
+    return false; // todo
 }
 
 }

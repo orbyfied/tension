@@ -40,6 +40,12 @@ enum MobilityType {
 /* INDEX DECLARATIONS */
 #define FILE_TO_CHAR(file) ((char)((file) + 'a'))
 #define RANK_TO_CHAR(rank) ((char)((rank) + '1'))
+#define CHAR_TO_FILE(c) ((u8)((c) - 'a'))
+#define CHAR_TO_RANK(c) ((u8)((c) - '1'))
+
+inline Sq sq_str_to_index(const char* ptr) {
+    return INDEX(CHAR_TO_FILE(ptr[0]), RANK_TO_CHAR(ptr[1]));
+}
 
 enum : int {
     fA = 0,
@@ -82,13 +88,17 @@ struct Move {
 
     inline bool null() const { return src == 0 && dst == 0; }
 
-    inline u8 source() const { return src; }
-    inline u8 destination() const { return dst; }
+    inline Sq source() const { return src; }
+    inline Sq destination() const { return dst; }
     inline u8 flags_raw() const { return flags; }
 
     Piece moved_piece(Board const* b) const;
     Piece captured_piece(Board const* b) const;
     bool is_capture(Board const* b) const;
+    bool is_check_estimated(Board const* b) const;
+
+    template<Color color>
+    inline Sq capture_index() const { return dst - (is_en_passant() * SIDE_OF_COLOR(color) * 8); }
 
     inline bool is_double_push() const { return flags == MOVE_DOUBLE_PUSH; }
     inline bool is_en_passant() const { return flags == MOVE_EN_PASSANT; }
@@ -115,18 +125,18 @@ static Move NULL_MOVE = { .src = 0, .dst = 0 };
 
 /// @brief Heap-allocated hashtable containing cached scores for moves derived from the evaluation during search
 struct MoveEvalTable {
-    i32* data = nullptr;
-    i32 capacity;
+    i16* data = nullptr;
+    i16 capacity;
 
     void alloc(i32 capacityInEntries); 
     void free();
     ~MoveEvalTable();
 
-    inline void add(Move move, i32 eval) {
+    inline void add(Move move, i16 eval) {
         this->data[MOVE_HASH(move) % capacity] = eval;
     }
 
-    inline i32 get_adjustment(Move move) {
+    inline i16 get_adjustment(Move move) {
         return this->data[MOVE_HASH(move) % capacity];
     }
 };

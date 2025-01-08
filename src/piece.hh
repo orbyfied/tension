@@ -1,9 +1,10 @@
 #pragma once
 
-namespace tc {
-
 #include "types.hh"
+#include "evaldef.h"
 #include <stdlib.h>
+
+namespace tc {
 
 /// @brief The player color part of the piece union
 enum PieceColor {
@@ -93,14 +94,14 @@ constexpr i32 evalValueBishop = iEval(3.0);
 constexpr i32 evalValueRook   = iEval(5.0);
 constexpr i32 evalValueQueen  = iEval(9.0);
 
-static u16 materialValuePerType[] = {
+static i16 materialValuePerType[] = {
     1, // Pawn
     3, // Knight
     3, // Bishop
     5, // Rook
     8, // Queen
     0, // King
-    0, // NULL aka COUNT
+    0, // NULL aka COUNT,
 };
 
 }

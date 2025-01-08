@@ -5,7 +5,7 @@ namespace tc::lookup {
 // Provide all vars
 extern constexpr PrecalcDistanceFromEdge distanceFromEdge { };
 extern constexpr PrecalcPawnAttackBBs pawnAttackBBs { };
-extern constexpr PrecalcKnightAttackBBs precalcKnightAttackBBs { };
+extern constexpr PrecalcKnightAttackBBs knightAttackBBs { };
 extern constexpr PrecalcKingAttackBBs kingAttackBBs { };
 extern constexpr PrecalcUnobstructedRookSlidingAttackBBs unobstructedRookAttackBBs { };
 extern constexpr PrecalcUnobstructedBishopSlidingAttackBBs unobstructedBishopAttackBBs { };

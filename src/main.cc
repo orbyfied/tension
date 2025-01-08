@@ -8,53 +8,67 @@
 #include "debug.hh"
 #include "board.hh"
 #include "search.hh"
+#include "basiceval.hh"
 
 using namespace tc;
 
 int main() {
-    Board b;
-    // b.set_piece<true>(fC | r4, WHITE_PIECE | ROOK);
-    // b.set_piece<true>(fH | r4, WHITE_PIECE | ROOK);
-    // b.set_piece<true>(fD | r3, WHITE_PIECE | PAWN);
-    // b.set_piece<true>(fA | r7, WHITE_PIECE | KNIGHT);
-    // b.set_piece<true>(fB | r5, BLACK_PIECE | KNIGHT);
-    // b.set_piece<true>(fB | r4, BLACK_PIECE | QUEEN);
-    // b.set_piece<true>(fE | r1, BLACK_PIECE | PAWN);
-    b.set_piece<true>(fA | r2, WHITE_PIECE | PAWN);
-    b.set_piece<true>(fC | r3, WHITE_PIECE | PAWN);
-    b.set_piece<true>(fB | r2, WHITE_PIECE | PAWN);
-    b.set_piece<true>(fB | r3, BLACK_PIECE | PAWN);
-    b.set_piece<true>(fH | r7, WHITE_PIECE | PAWN);
-    b.set_piece<true>(fD | r8, BLACK_PIECE | PAWN);
-    b.set_piece<true>(fE | r7, WHITE_PIECE | PAWN);
-
     std::ostringstream oss;
-    debug_tostr_board(oss, b, { });
 
-    MoveList<BasicScoreMoveOrderer, 1024, false> moveList;
-    gen_all_moves<decltype(moveList), defaultFullyLegalMovegenOptions, WHITE>(&b, &moveList);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    srand((tv.tv_sec) * 1000ULL + tv.tv_usec);
 
-    oss << "\n\nGenerated " << moveList.count << " moves for white:";
-    for (int i = moveList.count - 1; i >= 0; i--) {
-        Move move = moveList.moves[i];
-        if (move.null()) continue;
+    Board b;
+    // b.load_fen("startpos");
+    b.load_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ");
+    // b.load_fen("8/8/8/8/3p4/8/4P3/8 w - - 0 1");
 
-        oss << "\n[" << i << "]";
-        debug_tostr_move(oss, b, move);
-        oss << "  -  " << moveList.scores[i];
-    }
+    debug_tostr_board(std::cout, b, { });
 
-    std::cout << oss.str() << std::endl;
+    // MoveList<BasicScoreMoveOrderer, 1024, false> moveList;
+    // gen_all_moves<decltype(moveList), defaultFullyLegalMovegenOptions>(&b, &moveList, b.turn);
 
-    // struct timeval tv;
-    // gettimeofday(&tv, NULL);
-    // srand((tv.tv_sec) * 1000ULL + tv.tv_usec);
+    // oss << "\n\nGenerated " << moveList.count << " pseudo-legal moves for " << (b.turn ? "white" : "black");
+    // for (int i = moveList.count - 1; i >= 0; i--) {
+    //     Move move = moveList.moves[i];
+    //     if (move.null()) continue;
+
+    //     oss << "\n[" << i << "]";
+    //     debug_tostr_move(oss, b, move);
+    //     oss << "  -  " << moveList.scores[i];
+    // }
+
+    // std::cout << oss.str() << "\n\n";
+    // oss.str("");
+
+    constexpr static StaticSearchOptions SearchOptions { .useMoveEvalTable = true, .debugMetrics = true };
+    MoveEvalTable met;
+    met.alloc(4096);
+    BasicStaticEvaluator bse;
+    SearchManager sm;
+    sm.board = &b;
+    sm.leafEval = &bse;
+    SearchState<SearchOptions> searchState { .moveEvalTable = &met };
+    ThreadSearchState<SearchOptions> tss { };
+    int depth = 20;
+    SearchEvalResult res = sm.search_fixed_internal_sync<SearchOptions, WHITE, false>(&searchState, &tss, EVAL_NEGATIVE_INFINITY, EVAL_POSITIVE_INFINITY, depth, depth);
+
+    oss << "\n[*] Best move: ";
+    debug_tostr_move(oss, b, res.move);
+    oss << "  -  ";
+    write_eval(oss, res.eval);
+    ExtMove<true> extMove(res.move);
+    b.make_move_unchecked<WHITE, true>(&extMove);
+    std::cout << oss.str() << "\n";
+    debug_tostr_search_metrics(std::cout, &searchState);
 
     // char hl[64];
-    // float blockersDensity = 0.6f;
+    // float blockersDensity = 0.2f;
 
     // if (true) {
-    //     u8 rookIndex = rand() % 64;
+    //     // u8 rookIndex = rand() % 64;
+    //     u8 rookIndex = 4;
     //     u64 blockers = bitwise_random_64(blockersDensity);
     //     blockers &= ~(1ULL << rookIndex);
 
@@ -76,7 +90,7 @@ int main() {
     //     std::cout << oss.str() << std::endl;
     // }
 
-    // if (true) {
+    // if (false) {
     //     u8 bishopIndex = rand() % 64;
     //     u64 blockers = bitwise_random_64(blockersDensity);
     //     blockers &= ~(1ULL << bishopIndex);

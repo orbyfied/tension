@@ -60,6 +60,6 @@ struct BitboardToStrOptions {
 };
 
 /// @brief Visualize the bitboard in a string using a board layout and ANSI color codes
-void debug_tostr_bitboard(std::ostringstream& oss, u64 bb, BitboardToStrOptions options);
+void debug_tostr_bitboard(std::ostream& oss, u64 bb, BitboardToStrOptions options);
 
 }

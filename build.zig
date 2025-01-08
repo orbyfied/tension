@@ -40,7 +40,8 @@ pub fn build(b: *std.Build) !void {
 const standardFlags = [_][]const u8 {
     // compiler options
     "-std=c++23",
-    "-O3",
+    "-O0",
+    // "-O3",
 
     // constexpr
     "-fconstexpr-depth=9999", "-fconstexpr-steps=99999999",
@@ -56,20 +57,24 @@ pub fn addSources(directory: []const u8, b: *std.Build, c: *std.Build.Step.Compi
     defer walker.deinit();
 
     // all extensions treated as source files
-    const allowed_exts = [_][]const u8{ ".cc", ".cpp", ".c", ".cxx" };
+    const sourceExts = [_][]const u8{ ".cc", ".cpp", ".c", ".cxx" };
+    // const trackExts = [_][]const u8{ ".h", ".hh", ".hpp", ".hxx" };
 
     while (try walker.next()) |entry| {
         // check if extension matches one in the list
         const ext = std.fs.path.extension(entry.basename);
-        const includeFile = for (allowed_exts) |e| {
+        const inclAsSourceFile = for (sourceExts) |e| {
             if (std.mem.eql(u8, ext, e))
                 break true;
         } else false;
 
         // add source file
-        if (includeFile) {
+        if (inclAsSourceFile) {
+            // build flags
             var flags: std.ArrayList([]const u8) = std.ArrayList([]const u8).init(b.allocator);
             try flags.appendSlice(&standardFlags);
+
+            // add source file
             c.addCSourceFile(.{ .file = b.path(try std.fs.path.resolve(b.allocator, &.{ "src", entry.path })), .flags = try flags.toOwnedSlice()});
             defer flags.deinit();
         }

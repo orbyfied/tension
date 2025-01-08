@@ -22,7 +22,7 @@ typedef long double f64;
 
 /* Basic Types */
 typedef u8 Sq;
-#define NULL_SQ ((Sq)0xFF)
+#define NULL_SQ ((Sq)255)
 
 /// @brief The boolean color of a player
 typedef bool Color;
@@ -59,26 +59,6 @@ enum DirectionOffset : int {
 };
 
 constexpr DirectionOffset DIRECTION_TO_OFFSET[DIRECTION_COUNT] = { OFF_NORTH, OFF_SOUTH, OFF_EAST, OFF_WEST, OFF_NORTH_EAST, OFF_NORTH_WEST, OFF_SOUTH_EAST, OFF_SOUTH_WEST };
-
-// The scale of the integer evaluation values, determines the precision
-// possible when computing evaluation results. 
-#define EVAL_SCALE 1000
-
-#define DRAW_EVAL 0              // any draw
-#define M0  (-9999 * EVAL_SCALE) // mate in 0
-#define MRS (9000 * EVAL_SCALE)  // where the mate range starts in positive eval
-
-/// Retrieves the amount of moves until mate from the evaluation score, or 0 if no mate was found.
-#define COUNT_MATE_IN_PLY(eval) ((eval < 0 ? -eval : eval) > MRS ? (-M0 - (eval < 0 ? -eval : eval)) : 0)
-#define MATE_IN_PLY(moves)       (M0 + moves)
-
-constexpr inline f32 fEval(i32 eval) {
-  return eval / (EVAL_SCALE * (float)1);
-}
-
-constexpr inline i32 iEval(f32 eval) {
-  return (i32)(eval * EVAL_SCALE);
-}
 
 // constexpr ternary solution using force inlined lambdas
 // and a constexpr if statement
