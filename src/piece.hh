@@ -71,8 +71,8 @@ inline static PieceType charToPieceType(char c) {
 /// Pieces are simply encoded as a byte
 typedef u8 Piece;
 
-#define SIDE_OF_COLOR(c) ((int)(-1 + (c > 0) * 2))                // Returns -1 for black, 1 for white
-#define SIDE_OF_PIECE(p) ((int)(-1 + ((p & COLOR_MASK) > 0) * 2)) // Returns -1 for black, 1 for white
+#define SIGN_OF_COLOR(c) ((int)(-1 + (c > 0) * 2))                // Returns -1 for black, 1 for white
+#define SIGN_OF_PIECE(p) ((int)(-1 + ((p & COLOR_MASK) > 0) * 2)) // Returns -1 for black, 1 for white
 #define COLOR_OF_PIECE(p) (PieceColor)(p & COLOR_MASK)
 #define IS_WHITE_PIECE(p) (Color)((p & COLOR_MASK) > 0)
 #define TYPE_OF_PIECE(p)  (PieceType)(p & TYPE_MASK)
@@ -99,7 +99,7 @@ static i16 materialValuePerType[] = {
     3, // Knight
     3, // Bishop
     5, // Rook
-    8, // Queen
+    9, // Queen
     0, // King
     0, // NULL aka COUNT,
 };

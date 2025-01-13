@@ -1,9 +1,5 @@
 #pragma once
 
-#include <string>
-#include <sstream>
-#include <concepts>
-
 #include "types.hh"
 #include "piece.hh"
 
@@ -86,7 +82,7 @@ struct Move {
     // The additional move flags
     u8 flags : 4 = 0;
 
-    inline bool null() const { return src == 0 && dst == 0; }
+    inline bool null() const { return src == dst; }
 
     inline Sq source() const { return src; }
     inline Sq destination() const { return dst; }
@@ -98,7 +94,7 @@ struct Move {
     bool is_check_estimated(Board const* b) const;
 
     template<Color color>
-    inline Sq capture_index() const { return dst - (is_en_passant() * SIDE_OF_COLOR(color) * 8); }
+    inline Sq capture_index() const { return dst - (is_en_passant() * SIGN_OF_COLOR(color) * 8); }
 
     inline bool is_double_push() const { return flags == MOVE_DOUBLE_PUSH; }
     inline bool is_en_passant() const { return flags == MOVE_EN_PASSANT; }
@@ -115,6 +111,10 @@ struct Move {
         }
 
         return NULL_PIECE_TYPE;
+    }
+
+    inline bool eq_sd(Sq from, Sq to) {
+        return src == from && dst == to;
     }
 };
 

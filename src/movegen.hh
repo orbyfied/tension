@@ -4,9 +4,16 @@
 #include "move.hh"
 #include "lookup.hh"
 
+#include <algorithm>
+
 #define MAX_MOVES 216
 
 namespace tc {
+
+// fwd decl
+struct BoardToStrOptions;
+void debug_tostr_move(std::ostream& oss, Move move);
+void debug_tostr_board(std::ostream& oss, Board& b);
 
 enum MoveOrderingType {
     NO_MOVE_ORDERING,      // No move ordering, doesn't perform logic
@@ -14,24 +21,76 @@ enum MoveOrderingType {
     SCORE_MOVE_ORDERING    // Gives a score to each move
 };
 
+struct MoveScorePair {
+    Move move;
+    i16 score;
+};
+
 /// @brief An automatically sorted, stack allocated move list which can 
 /// be provided as a consumer for movegen functions.
 /// @param _MoveOrderer Must be a class with a field `constexpr MoveOrderingType moveOrderingType` 
 template<typename _MoveOrderer, u16 _Capacity, bool useEvalTable>
 struct MoveList {
-    u16 reserved = 0;                       // The amount of indices reserved at the start of the array for pre-defined
-                                            // highly sorted moves.
-    u16 count = 0;                          // The amount of moves in the array.
-    Move moves[_Capacity] = { NULL_MOVE };  // The data array.
+    u16 count = 0;                                   // The amount of moves in the array.
+    MoveScorePair moves[_Capacity];                  // The data array.
 
     /* Move Ordering */
-    i16 scores[_Capacity] = { 0 };          // The estimated scores for every move in the list, used for sorting.
-    MoveEvalTable* moveEvalTable;           // The move eval table, used if enabled
+    MoveEvalTable* moveEvalTable;                    // The move eval table, used if enabled
+
+    inline void set(int i, Move move, i16 score) {
+        moves[i] = { .move = move, .score = score };
+    }
+
+    inline Move get_move(int i) {
+        return moves[i].move;
+    }
+
+    inline i16 get_score(int i) {
+        return moves[i].score;
+    }
+
+    template<bool turn>
+    inline i16 score_move(Board* board, Move move) {
+        i16 score = _MoveOrderer::template score_move<turn>(board, move);
+            
+        if constexpr (useEvalTable) {
+            score += moveEvalTable->get_adjustment(move);
+        }
+
+        return score;
+    }
+
+    template<bool turn>
+    inline void sort_moves(Board* board) {
+#ifndef TC_MOVE_INSERT_SORT
+        if constexpr (_MoveOrderer::moveOrderingType == SCORE_MOVE_ORDERING) {
+            // score all moves
+            for (int i = count; i >= 0; i--) {
+                if (moves[i].move.null()) continue; 
+                moves[i].score = score_move<turn>(board, moves[i].move);
+            }
+
+            // sort the array using custom comp
+            std::sort((MoveScorePair*) &moves, (MoveScorePair*) &moves[count], [&](MoveScorePair a, MoveScorePair b) {
+                return a.score < b.score; // ascending order
+            });
+        }
+#endif
+    }
 
     template<Color turn>
     inline void accept(Board* board, Move move) {
+#ifndef TC_MOVE_INSERT_SORT
+        if (true) {
+            moves[count++] = { .move = move, .score = -9999 };
+            return;
+        }
+#endif
+        /* used to do sort on insertion, but its actually slower due to the necessity to move 
+           data on insertion into the middle of the array */
+#ifdef TC_MOVE_INSERT_SORT
         if constexpr (_MoveOrderer::moveOrderingType == NO_MOVE_ORDERING) { 
-            moves[count++] = move;
+            moves[count++] = { .move = move, .score = -9999 };
         } else if constexpr (_MoveOrderer::moveOrderingType == SCORE_MOVE_ORDERING) {
             i16 score = _MoveOrderer::template score_move<turn>(board, move);
             
@@ -41,22 +100,19 @@ struct MoveList {
 
             // check trivial case, we sort in ascending order because
             // we can simply traverse the array in reverse
-            if (count == 0 || score >= scores[count - 1]) {
-                moves[count] = move;
-                scores[count] = score;
-                count++;
+            if (count == 0 || score >= moves[count - 1].score) {
+                moves[count++] = { .move = move, .score = score };
                 return;
             }
 
             // find index and insert into appropriate location
             int index = 0;
-            while (score >= scores[index]) index++;
-            memmove(&moves[index + 1], &moves[index], (count - index) * sizeof(Move));
-            memmove(&scores[index + 1], &scores[index], (count - index) * sizeof(Move));
-            moves[index] = move;
-            scores[index] = score;
+            while (score >= moves[index].score && index < count) index++;
+            memmove(&moves[index + 1], &moves[index], (count - index) * sizeof(MoveScorePair));
+            moves[index] = { .move = move, .score = score };
             count++;
         }
+#endif
     }
 };
 
@@ -73,18 +129,26 @@ struct BasicScoreMoveOrderer {
     static i16 score_move(Board* board, Move move) {
         Piece moved = move.moved_piece(board);
         Piece captured = move.captured_piece(board);
+        i16 captureScore = (captured != NULL_PIECE ? materialValuePerType[TYPE_OF_PIECE(captured)] * 200 - materialValuePerType[TYPE_OF_PIECE(moved)] * 50 : 0);
+        
         i16 promotionScore = (move.flags == MOVE_PROMOTE_QUEEN) * 750 + (move.flags == MOVE_PROMOTE_KNIGHT) * 500 + (move.flags == MOVE_PROMOTE_ROOK) * 300 + (move.flags == MOVE_PROMOTE_BISHOP) * 300;
-        return  /* capture */ (captured != NULL_PIECE) /** MAX(0, materialValuePerType[TYPE_OF_PIECE(captured)] * 200 - materialValuePerType[TYPE_OF_PIECE(moved)] * 50)*/ +
+        return (i16) ( 
+                /* capture */ (captureScore >= 0 ? captureScore : 0) +
                 /* promotion */ promotionScore +
-                /* direct check */ ((board->volatile_state()->checkingSquares[!turn][TYPE_OF_PIECE(moved)] & (1ULL << move.destination())) > 1) * 500 +
-                /* en passant */ (move.is_en_passant() * 100);
+                // /* direct check */ ((board->volatile_state()->checkingSquares[!turn][TYPE_OF_PIECE(moved)] & (1ULL << move.destination())) > 1) * 500 +
+                /* en passant */ (move.is_en_passant() * 100)
+        );
     }
 }; 
 
 /// @brief The compile-time movegen options
 struct StaticMovegenOptions {
+    const bool leafMoves = false;             // Only generate moves needed to determine check-/stalemate
+
     const bool verifyInCheckLegal = false;    // Whether to check if moves made while in check are legal at movegen time
-    const bool verifyPinLegal = false;        // Whether to check for each move if it reveals a check on the ally king.
+    const bool verifyPinLegal = true;         // Whether to check for each move if it reveals a check on the ally king.
+
+    const bool updateAttackState = false;     // Whether to recalculate the attack state for the moving color during movegen
 
     const bool onlyEvasions = false;          // Whether to only generate evasions
     const bool onlyCaptures = false;          // Whether to only generate captures
@@ -111,7 +175,7 @@ void gen_all_moves(Board* board, _Consumer* consumer) {
         gen_bb_moves<_Consumer, _Options, turn, QUEEN>(board, consumer);
     }
     
-    // todo: generate king moves for this sid
+    // todo: generate king moves for this side
     if (board->kingIndexPerColor[turn] != NULL_SQ) {
         movegen_king<_Consumer, _Options, turn>(board, consumer, board->kingIndexPerColor[turn], (turn * WHITE) | KING);
     }
@@ -136,23 +200,15 @@ void gen_bb_moves(Board* board, _Consumer* consumer) {
         fromIndex = _pop_lsb(bb);
 
         // create attack bitboard
-        u8 toIndex = 0;
-        const Bitboard attackBB = board->trivial_attack_bb<pieceType>(fromIndex) & ~ourPieces;
-        Bitboard capturesBB = attackBB & theirPieces;
-        Bitboard nonCapturesBB = attackBB & ~theirPieces;
+        Sq toIndex = 0;
+        Bitboard attackBB = board->trivial_attack_bb<pieceType>(fromIndex) & ~ourPieces;
 
-        if constexpr (!_Options.onlyCaptures) {
-            while (capturesBB) {
-                toIndex = _pop_lsb(capturesBB);
-
-                // create move
-                Move move = Move::make(fromIndex, toIndex);
-                consumer->template accept<turn>(board, move);
-            }
+        if constexpr (_Options.onlyCaptures) {
+            attackBB &= theirPieces;
         }
-
-        while (nonCapturesBB) {
-            toIndex = _pop_lsb(nonCapturesBB);
+        
+        while (attackBB) {
+            toIndex = _pop_lsb(attackBB);
 
             // create move
             Move move = Move::make(fromIndex, toIndex);
@@ -248,78 +304,37 @@ inline void movegen_king(Board* board, _Consumer* consumer, Sq index, Piece p) {
     const Bitboard enemyBB = board->allPiecesPerColor[!color];
     const u8 file = FILE(index);
     const u8 rank = RANK(index);
-
-    // king move processing //
-    auto addMoveTo = [&](u8 dst) __attribute__((always_inline)) {
-        if (((friendlyBB >> dst) & 0x1) > 0) return; // discard
-
-        Move move = Move::make(index, dst);
-        if (!kingmove_check_legal<color>(board, move)) return; // discard
-
-        consumer->template accept<color>(board, move);
-    };
+    const Bitboard attacked = board->attacks_by(!color);
+    // const Bitboard attacked = 0;
 
     // castling move gen //
-    auto addCastlingMove = [&](u8 dstKingFile, u8 rookFile, bool right) __attribute__((always_inline)) {
-        u8 kingDstIndex = INDEX(dstKingFile, rank);
-        u8 newRookFile = rookFile + (1 - 2 * right);
+    auto addCastlingMove = [&](u8 dstIndex, u8 rookFile, bool right) __attribute__((always_inline)) {
+        if (rookFile == NULL_SQ) return;
 
-        // todo: check for castling into checks
-
-        // check squares empty, we have to check whether the bits
-        // on the rank between the king and the rook are all zero
-        // for this, we first extract the full rank bitline
-        //   H G F E D C B A
-        //   1 0 0 1 0 0 0 1
-        // we then shift it right or left by the king file, depending on the side
-        //  R, so >> 4 + 1
-        //   0 0 0 0 0 1 0 0
-        //  L, so << 4
-        //   0 0 0 1 0 0 0 0
-        // now we check if the number is less than or equal to
-        // the value 
-        u8 bitline = (board->allPieces >> (rank * 8)) & 0xFF;
-        u8 shiftedBitline = (right ? bitline >> (file + 1) : bitline << file);
-        if (right && __builtin_ctz(shiftedBitline) < rookFile - file - 1 || 
-                        __builtin_clz(shiftedBitline << 24) < file - rookFile - 1) {
+        Bitboard unattackedCondition = (right ? (0b00000011ULL << index) : (0b00000011ULL << (index - 3)));
+        if ((attacked & unattackedCondition) > 0) {
             return; // discard
         }
 
-        // check if castled rook is check for opponent
-        bool isCheckEstimated = board->is_check_attack<!color, STRAIGHT>(INDEX(newRookFile, rank));
-
-        Move move = Move::make(index, kingDstIndex, right ? MOVE_CASTLE_RIGHT : MOVE_CASTLE_LEFT);
-        if (!kingmove_check_legal<color>(board, move)) return; // discard
-
-        consumer->template accept<color>(board, move);
+        consumer->template accept<color>(board, Move::make(index, dstIndex, (right ? MOVE_CASTLE_RIGHT : MOVE_CASTLE_LEFT)));
     };
 
-    if (file > 0) addMoveTo(index - 1);
-    if (file < 7) addMoveTo(index + 1);
-    if (rank > 0) addMoveTo(index - 8);
-    if (rank < 7) addMoveTo(index + 8);
-    if (file > 0 && rank > 0) addMoveTo(index - 1 - 8);
-    if (file > 0 && rank < 7) addMoveTo(index - 1 + 8);
-    if (file < 7 && rank > 0) addMoveTo(index + 1 - 8);
-    if (file < 7 && rank < 7) addMoveTo(index + 1 + 8);
+    // normal movement
+    Bitboard dstBB = lookup::kingMovementBBs.values[index] & ~attacked & ~friendlyBB;
+    while (dstBB) {
+        u8 index = _pop_lsb(dstBB);
+        consumer->template accept<color>(board, Move::make(index, index));
+    }
+    
+    // can not castle while in check
+    if (board->checkers(color) > 0) { 
+        return;
+    }
 
-    // // generate castling moves
-    // u8 flags = board->volatile_state()->castlingStatus[color];
-    // if ((flags & CAN_CASTLE_R) > 0) { addCastlingMove(file + 2, board->find_file_of_first_rook_on_rank<color, true>(rank), true); }
-    // if ((flags & CAN_CASTLE_L) > 0) { addCastlingMove(file - 2, board->find_file_of_first_rook_on_rank<color, false>(rank), false); }
-}
-
-template<Color color>
-inline bool kingmove_check_legal(Board* board, Move move) {
-    // check moving into attack from other king
-    u8 otherKingIndex = board->kingIndexPerColor[!color];
-    u8 kingIndex = move.dst;
-    if ((otherKingIndex >= kingIndex + OFF_NORTH + OFF_WEST && otherKingIndex <= kingIndex + OFF_NORTH + OFF_EAST) ||
-        (otherKingIndex >= kingIndex + OFF_WEST && otherKingIndex <= kingIndex + OFF_EAST) ||
-        (otherKingIndex >= kingIndex + OFF_SOUTH + OFF_WEST && otherKingIndex <= kingIndex + OFF_SOUTH + OFF_EAST)) return false; 
-
-    // check moving into attack
-    return false; // todo
+    // castling moves
+    u8 flags = board->volatile_state()->castlingStatus[color];
+    if ((flags & CAN_CASTLE_R) > 0) { addCastlingMove(index + 2, board->find_file_of_first_rook_on_rank<color, true>(rank), true); }
+    if ((flags & CAN_CASTLE_L) > 0) { addCastlingMove(index - 2, board->find_file_of_first_rook_on_rank<color, false>(rank), false); }
 }
 
 }

@@ -43,7 +43,7 @@ static void log(CodePos pos, Level level, const char* fmt...) {
 
     va_list args;
     va_start(args, fmt);
-    std::cout << UWHT " " << p.string() << ":" << pos.line << " " reset " ";
+    std::cout << UWHT " " << p.string() << ":" << pos.line << " " CRESET " ";
     vprintf(fmt, args);
     printf("\n");
     va_end(args);

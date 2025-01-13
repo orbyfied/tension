@@ -17,6 +17,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     exe.linkLibCpp();
+    exe.addIncludePath(b.path("./external"));
     try addSources("./src", b, exe);
 
     b.installArtifact(exe);
@@ -40,14 +41,17 @@ pub fn build(b: *std.Build) !void {
 const standardFlags = [_][]const u8 {
     // compiler options
     "-std=c++23",
-    "-O0",
-    // "-O3",
+    // "-O0",
+    "-O3",
 
     // constexpr
     "-fconstexpr-depth=9999", "-fconstexpr-steps=99999999",
 
     // error/warning settings
     "-Wno-deprecated-enum-enum-conversion", "-Wunused-value", "-Wno-deprecated-anon-enum-enum-conversion",
+
+    // build options
+    // "-DTC_MOVE_INSERT_SORT"
 };
 
 /// Add all source files from the given directory to the compilation step

@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <immintrin.h>
+#include "debugbreak.h"
 
 #define MIN(a, b) (((a) > (b)) ? (b) : (a))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -12,7 +13,7 @@
 /* Base Types */
 typedef unsigned char u8;
 typedef unsigned short u16;
-typedef short i16;
+typedef signed short i16;
 typedef unsigned int u32;
 typedef int i32;
 typedef unsigned long long u64;
@@ -22,7 +23,7 @@ typedef long double f64;
 
 /* Basic Types */
 typedef u8 Sq;
-#define NULL_SQ ((Sq)255)
+#define NULL_SQ ((Sq)64)
 
 /// @brief The boolean color of a player
 typedef bool Color;

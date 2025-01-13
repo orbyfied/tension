@@ -30,6 +30,7 @@ typedef u64 Bitboard;
 
 // #define BB_FILES_XY_MASK(x, y) todo
 #define BB_RANKS_XY_MASK(x, y) ((BITBOARD_FULL_MASK >> ((y - x - 1) * 8) << (x * 8)))
+#define BB_FILE_SE_MASK(s, e) (())
 
 /* Chess Bitboards */
 #define BB_2_OR_7_RANK (0x00'FF'00'00'00'00'FF'00ULL)
@@ -46,14 +47,22 @@ inline u64 shift(u64 bb) {
     }
 }
 
-template<int off>
-inline u64 shift(u64 bb, int amount) {
-    if constexpr (off < 0) {
-        return bb >> -off * amount;
+inline u64 shift(u64 bb, int off) {
+    if (off < 0) {
+        return bb >> -off;
     } else {
-        return bb << off * amount;
+        return bb << off;
     }
 }
+
+// template<int off>
+// inline u64 shift(u64 bb, int amount) {
+//     if constexpr (off < 0) {
+//         return bb >> -off * amount;
+//     } else {
+//         return bb << off * amount;
+//     }
+// }
 
 struct BitboardToStrOptions {
     char* highlightChars = nullptr;

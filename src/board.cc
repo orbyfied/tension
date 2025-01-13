@@ -1,6 +1,36 @@
 #include "board.hh"
 
+#include <sys/time.h>
+#include <random>
+
 namespace tc {
+
+static u64 seedrng() {
+    // seed the random number gen
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    u64 seed = tv.tv_sec * 1000ULL + (tv.tv_usec);
+    srand(seed);
+    return seed;
+}
+
+template<int arraySize>
+static const PositionHashArray<arraySize> init_zarray() {
+    PositionHashArray<arraySize> array;
+
+    // generate random number for each index
+    for (int i = 0; i < array.size(); i++) {
+        u64 r = ((u64)rand() | ((u64)rand() << 32) | ((u64)rand() << 16) | ((u64)rand() << 48));  
+        array[i] = r;
+    }
+
+    return array;
+}
+
+static u64 __seed = seedrng();
+
+extern const PositionHashArray<1 << 12> pieceSqHashes = init_zarray<1 << 12>();
+extern const PositionHashArray<65> enPassantSqHashes = init_zarray<65>();
 
 Board::Board() {
     // init bitboards to 0 idk if this is needed tbh

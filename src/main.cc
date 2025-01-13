@@ -22,9 +22,10 @@ int main() {
     Board b;
     // b.load_fen("startpos");
     b.load_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ");
-    // b.load_fen("8/8/8/8/3p4/8/4P3/8 w - - 0 1");
-
+    // b.load_fen("k7/6b1/8/1qb1K1Br/8/4N3/8/4r3 w - - 0 1");
+    
     debug_tostr_board(std::cout, b, { });
+    // debug_tostr_bitboard(std::cout, b.attacks_by(WHITE), { });
 
     // MoveList<BasicScoreMoveOrderer, 1024, false> moveList;
     // gen_all_moves<decltype(moveList), defaultFullyLegalMovegenOptions>(&b, &moveList, b.turn);
@@ -34,34 +35,58 @@ int main() {
     //     Move move = moveList.moves[i];
     //     if (move.null()) continue;
 
-    //     oss << "\n[" << i << "]";
+    //     oss << "\n[" << i << "] ";
     //     debug_tostr_move(oss, b, move);
     //     oss << "  -  " << moveList.scores[i];
     // }
 
-    // std::cout << oss.str() << "\n\n";
-    // oss.str("");
+    std::cout << oss.str() << "\n\n";
+    oss.str("");
 
-    constexpr static StaticSearchOptions SearchOptions { .useMoveEvalTable = true, .debugMetrics = true };
+    if (false) {
+        return 0;
+    }
+
+    constexpr bool searchMetrics = false;
+    constexpr static StaticSearchOptions SearchOptions { .useTranspositionTable = false, .useMoveEvalTable = true, .debugMetrics = searchMetrics };
+    TranspositionTable tt;
+    tt.alloc(1024 * 1024 * 128);
     MoveEvalTable met;
-    met.alloc(4096);
+    met.alloc(64 * 64 * 8);
     BasicStaticEvaluator bse;
     SearchManager sm;
     sm.board = &b;
     sm.leafEval = &bse;
-    SearchState<SearchOptions> searchState { .moveEvalTable = &met };
+    SearchState<SearchOptions> searchState { .moveEvalTable = &met, .transpositionTable = &tt };
     ThreadSearchState<SearchOptions> tss { };
-    int depth = 20;
-    SearchEvalResult res = sm.search_fixed_internal_sync<SearchOptions, WHITE, false>(&searchState, &tss, EVAL_NEGATIVE_INFINITY, EVAL_POSITIVE_INFINITY, depth, depth);
+    SearchEvalResult res;
+    constexpr int maxDepth = 8;
+    std::cout << "\n";
 
-    oss << "\n[*] Best move: ";
-    debug_tostr_move(oss, b, res.move);
-    oss << "  -  ";
-    write_eval(oss, res.eval);
-    ExtMove<true> extMove(res.move);
-    b.make_move_unchecked<WHITE, true>(&extMove);
-    std::cout << oss.str() << "\n";
-    debug_tostr_search_metrics(std::cout, &searchState);
+    gettimeofday(&tv, NULL);
+    double t0 = (tv.tv_sec * 1000ULL) + (tv.tv_usec / 1000);
+
+    for (int depth = 2; depth <= maxDepth; depth++) {
+        gettimeofday(&tv, NULL);
+        double t1 = (tv.tv_sec * 1000ULL) + (tv.tv_usec / 1000);
+
+        if (b.turn == WHITE) res = sm.search_fixed_internal_sync<SearchOptions, WHITE, false>(&searchState, &tss, EVAL_NEGATIVE_INFINITY, EVAL_POSITIVE_INFINITY, depth, depth);
+        else res = sm.search_fixed_internal_sync<SearchOptions, BLACK, false>(&searchState, &tss, EVAL_NEGATIVE_INFINITY, EVAL_POSITIVE_INFINITY, depth, depth);
+        
+        gettimeofday(&tv, NULL);
+        double t2 = (tv.tv_sec * 1000ULL) + (tv.tv_usec / 1000);
+
+        std::cout << "Completed depth " << depth << " search for " << (b.turn ? "WHITE" : "BLACK") << " to move, best move [";
+        debug_tostr_move(std::cout, b, res.move);
+        std::cout << "]  -  ";
+        write_eval(std::cout, SIGN_OF_COLOR(b.turn) * res.eval);
+        std::cout << "\n";
+        std::cout << " Time: " << (t2 - t1) << "ms, total: " << (t2 - t0) << "ms\n";
+        if (searchMetrics) {
+            debug_tostr_search_metrics(std::cout, &searchState);
+            std::cout << "\n";
+        }
+    }
 
     // char hl[64];
     // float blockersDensity = 0.2f;

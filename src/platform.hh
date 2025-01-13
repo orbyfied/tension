@@ -8,9 +8,9 @@
 // Compiler
 #if defined(__clang__)
 
-#define _forceinline __attribute__((always_inline))
-
 #endif
+
+#define forceinline __attribute__((always_inline))
 
 // Architecture
 #if defined(__clang__) || defined(__gcc__)

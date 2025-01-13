@@ -22,13 +22,17 @@ void tc::debug_tostr_bitboard(std::ostream& oss, u64 bb, BitboardToStrOptions op
                 c = '0' + b;
             }
 
-            oss << (b ? GRNB : REDB) << " " << c << " " << reset << "|";
+            oss << (b ? GRNB : REDB) << " " << c << " " << CRESET << "|";
         }
 
         oss << "\n" << rowSep << "\n";
     }
 
     oss <<                     "     A   B   C   D   E   F   G   H" << std::endl;
+}
+
+void tc::debug_tostr_board(std::ostream& oss, Board& b) {
+    debug_tostr_board(oss, b, { });
 }
 
 void tc::debug_tostr_board(std::ostream& oss, Board& b, BoardToStrOptions options) {
@@ -50,7 +54,7 @@ void tc::debug_tostr_board(std::ostream& oss, Board& b, BoardToStrOptions option
 
             Color color = IS_WHITE_PIECE(p);
 
-            oss << (color ? BLK : WHT) << (p == NULL_PIECE ? reset : (color ? WHTB : BLKB));
+            oss << (color ? BLK : WHT) << (p == NULL_PIECE ? CRESET : (color ? WHTB : BLKB));
 
             if (enPassant) {
                 oss << BLUB;
@@ -65,11 +69,11 @@ void tc::debug_tostr_board(std::ostream& oss, Board& b, BoardToStrOptions option
             }
 
             if (p == NULL_PIECE) {
-                oss << "   " << reset << "|";
+                oss << "   " << CRESET << "|";
                 continue;
             }
 
-            oss << " " << pieceToChar(p) << " " << reset << "|";
+            oss << " " << pieceToChar(p) << " " << CRESET << "|";
         }
 
         // append info to the right
@@ -94,6 +98,20 @@ void tc::debug_tostr_board(std::ostream& oss, Board& b, BoardToStrOptions option
 }
 
 void tc::debug_tostr_move(std::ostream& oss, Board& b, Move move) {
+    if (move.null()) {
+        oss << "<NULL MOVE>";
+        return;
+    }
+
+    oss << FILE_TO_CHAR(FILE(move.src)) << RANK_TO_CHAR(RANK(move.src));
+    oss << FILE_TO_CHAR(FILE(move.dst)) << RANK_TO_CHAR(RANK(move.dst));
+    if (move.is_promotion()) oss << " =" << typeToCharLowercase[move.promotion_piece()];
+    if (move.is_en_passant()) oss << " ep";
+    if (move.is_castle_left()) oss << " O-O-O";
+    if (move.is_castle_right()) oss << " O-O";
+}
+
+void tc::debug_tostr_move(std::ostream& oss, Move move) {
     if (move.null()) {
         oss << "<NULL MOVE>";
         return;

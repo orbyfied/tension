@@ -2,8 +2,9 @@
 
 namespace tc {
 
-void TranspositionTable::add(Board* board, i32 depth, i32 eval) {
-
+void TranspositionTable::alloc(u32 entryCount) {
+    this->capacity = entryCount;
+    this->data = (TTEntry*)calloc(capacity, sizeof(TTEntry));
 }
 
 }
