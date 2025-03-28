@@ -56,7 +56,7 @@ struct PrecalcDistanceFromEdge {
 struct PrecalcPawnAttackBBs {
     Bitboard values[2][64];
 
-    constexpr PrecalcPawnAttackBBs() : values() {
+    PrecalcPawnAttackBBs() : values() {
         for (int color = 1; color >= 0; color--) {
             i32 direction = (color ? 8 : -8);
             for (u8 file = 0; file < 8; file++) {
@@ -84,7 +84,7 @@ struct PrecalcPawnAttackBBs {
 struct PrecalcKnightAttackBBs {
     Bitboard values[64];
 
-    constexpr PrecalcKnightAttackBBs() : values() {
+    PrecalcKnightAttackBBs() : values() {
         for (u8 file = 0; file < 8; file++) {
             for (u8 rank = 0; rank < 8; rank++) {
                 Sq index = file + rank * 8;
@@ -111,7 +111,7 @@ struct PrecalcKnightAttackBBs {
 struct PrecalcKingMovementBBs {
     Bitboard values[64];
 
-    constexpr PrecalcKingMovementBBs() : values() {
+    PrecalcKingMovementBBs() : values() {
         for (u8 file = 0; file < 8; file++) {
             for (u8 rank = 0; rank < 8; rank++) {
                 Sq index = file + rank * 8;
@@ -139,7 +139,7 @@ struct PrecalcUnobstructedRookSlidingAttackBBs {
     Bitboard values[64];
     Bitboard blockerMasks[64];
 
-    constexpr PrecalcUnobstructedRookSlidingAttackBBs() : values(), blockerMasks() {
+    PrecalcUnobstructedRookSlidingAttackBBs() : values(), blockerMasks() {
         for (u8 file = 0; file < 8; file++) {
             for (u8 rank = 0; rank < 8; rank++) {
                 Sq index = file + rank * 8;
@@ -161,7 +161,7 @@ struct PrecalcUnobstructedBishopSlidingAttackBBs {
     Bitboard values[64];
     Bitboard blockerMasks[64];
 
-    constexpr PrecalcUnobstructedBishopSlidingAttackBBs() : values(), blockerMasks() {
+    PrecalcUnobstructedBishopSlidingAttackBBs() : values(), blockerMasks() {
         for (u8 file = 0; file < 8; file++) {
             for (u8 rank = 0; rank < 8; rank++) {
                 Sq index = file + rank * 8;
@@ -242,7 +242,7 @@ extern const PrecalcUnobstructedRookSlidingAttackBBs unobstructedRookAttackBBs;
 extern const PrecalcUnobstructedBishopSlidingAttackBBs unobstructedBishopAttackBBs;
 
 #ifndef TC_LOOKUP_TYPE
-#define TC_LOOKUP_TYPE pext
+#define TC_LOOKUP_TYPE magic
 #endif
 
 /* ------------- Lookup using PEXT instructions ------------- */
@@ -268,6 +268,7 @@ struct PrecalcRookAttackBBs {
     u16* xrayKeys[64]; // xray key per bb
 
     PrecalcRookAttackBBs() {
+        u64 highestEntryCount = 0;
         for (Sq index = 0; index < 64; index++) {
             u8 file = FILE(index); u8 rank = RANK(index);
 
@@ -280,6 +281,7 @@ struct PrecalcRookAttackBBs {
             u16* xrayKeyTable = new u16[1 << blockerCount];
             values[index] = bbTable;
             xrayKeys[index] = xrayKeyTable;
+            highestEntryCount = MAX(1 << blockerCount, highestEntryCount);
 
             // use pdep to gen blockers from numbers
             for (u64 key = 0; key < (1 << blockerCount); key++) {
@@ -319,6 +321,8 @@ struct PrecalcRookAttackBBs {
                 xrayKeyTable[key] = xrayKey;
             }
         }
+        
+        log<DEBUG>(P, "Precomputed PEXT rook attack bitboards [maxEntries=%llu]", highestEntryCount);
     }
 };
 
@@ -328,6 +332,7 @@ struct PrecalcBishopAttackBBs {
     u16* xrayKeys[64]; // xray key per bb
 
     PrecalcBishopAttackBBs() {
+        u64 highestEntryCount = 0;
         for (Sq index = 0; index < 64; index++) {
             u8 file = FILE(index); u8 rank = RANK(index);
 
@@ -340,6 +345,7 @@ struct PrecalcBishopAttackBBs {
             u16* xrayKeyTable = new u16[1 << blockerCount];
             values[index] = bbTable;
             xrayKeys[index] = xrayKeyTable;
+            highestEntryCount = MAX(1 << blockerCount, highestEntryCount);
 
             // use pdep to gen blockers from numbers
             for (u64 key = 0; key < (1 << blockerCount); key++) {
@@ -379,6 +385,8 @@ struct PrecalcBishopAttackBBs {
                 xrayKeyTable[key] = xrayKey;
             }
         }
+
+        log<DEBUG>(P, "Precomputed PEXT bishop attack bitboards [maxEntries=%llu]", highestEntryCount);
     }
 };
 
@@ -420,15 +428,15 @@ inline Bitboard get_bishop_attack_bb(Sq index, u64 key) {
 }
 #endif
 
-#if TC_LOOKUP_TYPE == magic && false
+#if TC_LOOKUP_TYPE == magic
 /* ------------- Lookup using magic bitboards ------------- */
 namespace __magic {
 
 extern const u64 rookMagicPerSq[64];
 extern const u64 bishopMagicPerSq[64]; 
 
-extern const u8 rookMagicShift[64];    // 64 - index bits
-extern const u8 bishopMagicShift[64]; 
+extern const std::array<u8, 64> rookMagicShift;    // 64 - index bits
+extern const std::array<u8, 64> bishopMagicShift; 
 
 inline u64 rook_attack_key(Sq index, u64 blockers) {
     return (rookMagicPerSq[index] * (unobstructedRookAttackBBs.blockerMasks[index] & blockers)) >> (rookMagicShift[index]);
@@ -452,7 +460,7 @@ struct PrecalcRookAttackBBs {
             u8 blockerCount = _popcount64(mask);
 
             // allocate tables
-            u8 tableSize = 1 << (64 - rookMagicShift[index]);
+            u32 tableSize = 1 << (64 - rookMagicShift[index]);
             Bitboard* bbTable = new Bitboard[tableSize];
             u16* xrayKeyTable = new u16[tableSize];
             values[index] = bbTable;
@@ -461,7 +469,7 @@ struct PrecalcRookAttackBBs {
             // use pdep to gen blockers from numbers
             for (u64 blockersExt = 0; blockersExt < (1 << blockerCount); blockersExt++) {
                 Bitboard blockers = _pdep_u64(blockersExt, mask);
-                u64 key = blockers * rookMagicPerSq[index];
+                u64 key = (blockers * rookMagicPerSq[index]) >> rookMagicShift[index];
                 Bitboard fb = 0;
                 Bitboard bb = 0;
                 int x = file, y = rank;
@@ -514,7 +522,7 @@ struct PrecalcBishopAttackBBs {
             u8 blockerCount = _popcount64(mask);
 
             // allocate tables
-            u8 tableSize = 1 << (64 - bishopMagicShift[index]);
+            u32 tableSize = 1 << (64 - bishopMagicShift[index]);
             Bitboard* bbTable = new Bitboard[tableSize];
             u16* xrayKeyTable = new u16[tableSize];
             values[index] = bbTable;
@@ -523,7 +531,7 @@ struct PrecalcBishopAttackBBs {
             // use pdep to gen blockers from numbers
             for (u64 blockersExt = 0; blockersExt < (1 << blockerCount); blockersExt++) {
                 Bitboard blockers = _pdep_u64(blockersExt, mask);
-                u64 key = blockers * rookMagicPerSq[index];
+                u64 key = (blockers * bishopMagicPerSq[index]) >> bishopMagicShift[index];
                 Bitboard fb = 0;
                 Bitboard bb = 0;
                 int x = file, y = rank;
@@ -587,6 +595,14 @@ inline Bitboard get_rook_attack_bb(Sq index, u64 key) {
 
 inline Bitboard get_bishop_attack_bb(Sq index, u64 key) {
     return bishopAttackBBs.values[index][key];
+}
+
+inline Bitboard rook_xray_bb(Sq index, u64 lastKey) {
+    return rookAttackBBs.values[index][rook_xray_key(index, lastKey)];
+}
+
+inline Bitboard bishop_xray_bb(Sq index, u64 lastKey) {
+    return bishopAttackBBs.values[index][bishop_xray_key(index, lastKey)];
 }
 
 }

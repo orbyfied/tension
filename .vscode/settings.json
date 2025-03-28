@@ -50,7 +50,20 @@
         "iomanip": "cpp",
         "sstream": "cpp",
         "iterator": "cpp",
-        "__assert": "cpp"
+        "__assert": "cpp",
+        "__tree": "cpp",
+        "charconv": "cpp",
+        "forward_list": "cpp",
+        "fstream": "cpp",
+        "future": "cpp",
+        "map": "cpp",
+        "regex": "cpp",
+        "set": "cpp"
     },
-    "editor.formatOnSave": false
+    "editor.formatOnSave": false,
+    "C_Cpp.default.includePath": [
+        "./vendor/popl/include/",
+        "./vendor/",
+        "${default}"
+    ]
 }

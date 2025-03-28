@@ -77,24 +77,29 @@ void tc::debug_tostr_board(std::ostream& oss, Board& b, BoardToStrOptions option
         }
 
         // append info to the right
+        VolatileBoardState& state = *b.volatile_state();
         switch (rank)
         {
+        case 6:
+            oss << " To move: " << (b.turn ? "WHITE" : "BLACK") << ", ply played: " << b.ply << ", 50MR counter: " << (int)b.volatile_state()->rule50Ply;
+            break;
+        case 5:
+            oss << " In check? W: " << b.template is_in_check<WHITE>() << " B: " << b.template is_in_check<BLACK>();
+            break;
+        case 4:
+            oss << " Castling W: 0b" << std::bitset<4>(state.castlingStatus[1]) << " " << (state.castlingStatus[1] & CASTLED_L ? "castled Q" : (state.castlingStatus[1] & CASTLED_R ? "castled K" : "not castled")) 
+                << ", rights: " << (state.castlingStatus[1] & CAN_CASTLE_L ? "Q" : "") << (state.castlingStatus[1] & CAN_CASTLE_R ? "K" : "");
+            break;
         case 3:
-            // oss << "  Material: W " << b.template count_material<WHITE>() << " B " << b.template count_material<BLACK>();
+            oss << " Castling B: 0b" << std::bitset<4>(state.castlingStatus[1]) << " " << (state.castlingStatus[0] & CASTLED_L ? "castled Q" : (state.castlingStatus[0] & CASTLED_R ? "castled K" : "not castled")) 
+                << ", rights: " << (state.castlingStatus[0] & CAN_CASTLE_L ? "Q" : "") << (state.castlingStatus[0] & CAN_CASTLE_R ? "K" : "");
             break;
         }
 
         oss << "\n" << rowSep << "\n";
     }
 
-    VolatileBoardState& state = *b.volatile_state();
-
     oss <<                     "     A   B   C   D   E   F   G   H" << std::endl << std::endl;
-    oss << "   * in check? W: " << b.template is_in_check<WHITE>() << " B: " << b.template is_in_check<BLACK>() << std::endl;
-    oss << "   * castling W: 0b" << std::bitset<4>(state.castlingStatus[1]) << " " << (state.castlingStatus[1] & CASTLED_L ? "castled Q" : (state.castlingStatus[1] & CASTLED_R ? "castled K" : "not castled")) 
-        << ", rights: " << (state.castlingStatus[1] & CAN_CASTLE_L ? "Q" : "") << (state.castlingStatus[1] & CAN_CASTLE_R ? "K" : "") << std::endl;
-    oss << "   * castling B: 0b" << std::bitset<4>(state.castlingStatus[1]) << " " << (state.castlingStatus[0] & CASTLED_L ? "castled Q" : (state.castlingStatus[0] & CASTLED_R ? "castled K" : "not castled")) 
-        << ", rights: " << (state.castlingStatus[0] & CAN_CASTLE_L ? "Q" : "") << (state.castlingStatus[0] & CAN_CASTLE_R ? "K" : "") << std::endl;
 }
 
 void tc::debug_tostr_move(std::ostream& oss, Board& b, Move move) {
@@ -136,7 +141,7 @@ void tc::debug_tostr_xmove(std::ostream& oss, Board& b, ExtMove<true>* xMove) {
     oss << FILE_TO_CHAR(FILE(move.src)) << RANK_TO_CHAR(RANK(move.src));
     oss << FILE_TO_CHAR(FILE(move.dst)) << RANK_TO_CHAR(RANK(move.dst));
     if (xMove->captured != NULL_PIECE) oss << " x" << pieceToChar(xMove->captured);
-    bool isCheck = (b.volatile_state()->checkingSquares[!IS_WHITE_PIECE(p)][TYPE_OF_PIECE(p)] & (1ULL << move.dst)) > 1;
+    bool isCheck = (b.checkingSquares[!IS_WHITE_PIECE(p)][TYPE_OF_PIECE(p)] & (1ULL << move.dst)) > 1;
     if (isCheck) oss << " #";
     if (move.is_promotion()) oss << " =" << typeToCharLowercase[move.promotion_piece()];
     if (move.is_en_passant()) oss << " ep";

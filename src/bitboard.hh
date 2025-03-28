@@ -14,6 +14,9 @@ typedef u64 Bitboard;
 
 /* Basic Masks */
 
+#define sqbb(s) (1ULL << s)
+#define SQBB(s) (1ULL << s)
+
 #define BITBOARD_FULL_MASK     (0xFF'FF'FF'FF'FF'FF'FF'FFULL)
 #define BITBOARD_RANK0_MASK    (0x00'00'00'00'00'00'00'FFULL)
 #define BITBOARD_RANK0_27_MASK (0x00'00'00'00'00'00'00'7EULL)
@@ -35,6 +38,17 @@ typedef u64 Bitboard;
 /* Chess Bitboards */
 #define BB_2_OR_7_RANK (0x00'FF'00'00'00'00'FF'00ULL)
 #define BB_1_OR_8_RANK (0xFF'00'00'00'00'00'00'FFULL)
+
+/* Precomputed lines on bitboards between 2 squares */
+extern Bitboard betweenBBsExcl[64][64];
+
+forceinline Bitboard between_bb_inclusive(Sq a, Sq b) {
+    return betweenBBsExcl[a][b] | sqbb(a) | sqbb(b);
+}
+
+forceinline Bitboard between_bb_exclusive(Sq a, Sq b) {
+    return betweenBBsExcl[a][b];
+}
 
 #define CLOSE }
 

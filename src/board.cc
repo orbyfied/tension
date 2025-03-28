@@ -2,6 +2,7 @@
 
 #include <sys/time.h>
 #include <random>
+#include "util.hh"
 
 namespace tc {
 
@@ -11,6 +12,7 @@ static u64 seedrng() {
     gettimeofday(&tv, NULL);
     u64 seed = tv.tv_sec * 1000ULL + (tv.tv_usec);
     srand(seed);
+    log<DEBUG>(P, "Zhash rng seed: %llu", seed);
     return seed;
 }
 
@@ -30,7 +32,9 @@ static const PositionHashArray<arraySize> init_zarray() {
 static u64 __seed = seedrng();
 
 extern const PositionHashArray<1 << 12> pieceSqHashes = init_zarray<1 << 12>();
-extern const PositionHashArray<65> enPassantSqHashes = init_zarray<65>();
+extern const PositionHashArray<256> enPassantSqHashes = init_zarray<256>();
+
+extern const PositionHashArray<2> sideToMoveHashes = init_zarray<2>();
 
 Board::Board() {
     // init bitboards to 0 idk if this is needed tbh
@@ -40,15 +44,23 @@ Board::Board() {
     allPieces = 0;
 }
 
-void Board::recalculate_state() {
-    clear_state_for_recalculation();
-    recalculate_state_sided<WHITE>();
-    recalculate_state_sided<BLACK>();
+void Board::load_fen(const char* cstr) {
+    if (strcmp(cstr, "startpos") == 0) {
+        load_fen(startFEN);
+        return;
+    }
+
+    std::string str(cstr);
+    std::istringstream iss(str);
+    std::noskipws(iss);
+    std::istream_iterator<char> it(iss);
+    load_fen(it, std::istream_iterator<char>());
 }
 
-void Board::load_fen(const char* str) {
-    int len = strlen(str);
-    if (strcmp(str, "startpos") == 0) {
+void Board::load_fen(std::istream_iterator<char>& it, const std::istream_iterator<char>& end) {
+    skip_whitespace(it);
+
+    if (*it == 's') {
         load_fen(startFEN);
         return;
     }
@@ -58,84 +70,91 @@ void Board::load_fen(const char* str) {
     // parse piece placement
     u8 rank = 7;
     u8 file = 0;
-    int i = 0;
-    while (i < len && str[i] != ' ') {
-        if (str[i] == '/') {
+    while (*it != ' ' && it != end && (rank > 0 || file < 8)) {
+        if (*it == '/') {
             rank--;
             file = 0;
-            i++;
+            it++;
             continue;
         }
 
         // parse skip
-        if (isdigit(str[i])) {
-            file += str[i] - '0';
-            i++;
+        if (isdigit(*it)) {
+            file += *it - '0';
+            it++;
             continue;
         }
-        
 
         // parse pieces
-        char pieceChar = str[i];
+        char pieceChar = *it;
         u8 color = isupper(pieceChar) * WHITE_PIECE;
         PieceType type = charToPieceType(pieceChar);
         this->set_piece<false>(INDEX(file, rank), type | color);
         file += 1;
-        i++;
+        it++;
     }
 
-    i++;
-    if (i < len) {
+    it++;
+    if (it != end) {
         // parse side to move
-        turn = tolower(str[i]) == 'w';
-        i++;
+        turn = tolower(*it) == 'w';
+        it++;
+    } else {
+        goto ret;
     }
 
     // parse castling rights
-    i++;
+    it++;
     state->castlingStatus[BLACK] = state->castlingStatus[WHITE] = 0;
-    while (i < len && str[i] != ' ') {
-        Color color = isupper(str[i]);
-        u8 flags = tolower(str[i]) == 'k' ? CAN_CASTLE_R : CAN_CASTLE_L;
+    while (it != end && *it != '-' && *it != ' ') {
+        Color color = isupper(*it);
+        u8 flags = tolower(*it) == 'k' ? CAN_CASTLE_R : CAN_CASTLE_L;
         state->castlingStatus[color] |= flags;
-        i++;
+        it++;
     }
 
     // parse en passant sq
-    i++;
-    if ((i + 2) < len) {
-        if (str[i] == '-') {
-            state->enPassantTarget = NULL_SQ;
-            i++;
-        } else {
-            state->enPassantTarget = sq_str_to_index(&str[i]);
-            i += 2;
-        }
+    it++;
+    if (it == end) {
+        goto ret;
     }
 
-    auto parseInt = [&]() -> int {
-        int res = 0;
-        while (i < len && isdigit(str[i])) {
-            res *= 10;
-            res += str[i] - '0';
-            i++;
-        }
+    if (*it == ' ') {
+        it++;
+    }
 
-        return res;
-    };
+    if (it != end) {
+        if (*it == '-') {
+            state->enPassantTarget = NULL_SQ;
+            it++;
+        } else {
+            char fileChar = *it;
+            it++;
+            char rankChar = *it;
+            state->enPassantTarget = INDEX(CHAR_TO_FILE(fileChar), CHAR_TO_RANK(rankChar));
+            it++; it++;
+        }
+    } else {
+        goto ret;
+    }
 
     // parse halfmove clock
-    i++;
-    if (i < len) {
-        state->rule50Ply = parseInt();
+    it++;
+    if (it != end) {
+        state->rule50Ply = parse_int(it, end);
+    } else {
+        goto ret;
     }
 
     // parse full move counter
-    i++;
-    if (i < len) {
-        ply = (parseInt() - 1) * 2;
+    it++;
+    if (it != end) {
+        ply = (parse_int(it, end) - 1) * 2;
+    } else {
+        goto ret;
     }
 
+ret:
     this->recalculate_state();
 }
 

@@ -3,7 +3,6 @@
 #include <string>
 #include <sstream>
 #include "board.hh"
-#include "util/debug.hh"
 
 namespace tc {
 

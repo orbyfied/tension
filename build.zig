@@ -17,7 +17,11 @@ pub fn build(b: *std.Build) !void {
     });
 
     exe.linkLibCpp();
-    exe.addIncludePath(b.path("./external"));
+
+    for (explicitIncludeDirs) |item| {
+        exe.addIncludePath(b.path(item));
+    }
+
     try addSources("./src", b, exe);
 
     b.installArtifact(exe);
@@ -38,11 +42,17 @@ pub fn build(b: *std.Build) !void {
     run_step.dependOn(&run_cmd.step);
 }
 
+const explicitIncludeDirs = [_][]const u8 {
+    "./src/",
+    "./vendor/",
+    "./vendor/popl/include/"
+};
+
 const standardFlags = [_][]const u8 {
     // compiler options
     "-std=c++23",
-    // "-O0",
-    "-O3",
+    "-funroll-loops",
+    "-O0",
 
     // constexpr
     "-fconstexpr-depth=9999", "-fconstexpr-steps=99999999",
@@ -51,7 +61,13 @@ const standardFlags = [_][]const u8 {
     "-Wno-deprecated-enum-enum-conversion", "-Wunused-value", "-Wno-deprecated-anon-enum-enum-conversion",
 
     // build options
-    // "-DTC_MOVE_INSERT_SORT"
+    "-DTC_LOOKUP_TYPE=pext",
+
+    "-Wl,-stack_size", "-Wl,0x1000000"
+};
+
+const linkerFlags = [_][]const u8 {
+
 };
 
 /// Add all source files from the given directory to the compilation step

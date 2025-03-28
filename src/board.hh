@@ -3,6 +3,9 @@
 #include <memory.h>
 #include <iostream>
 #include <array>
+#include <string>
+#include <iterator>
+#include <sstream>
 
 #include "types.hh"
 #include "bitboard.hh"
@@ -21,39 +24,35 @@ template<int size>
 using PositionHashArray = std::array<PositionHash, size>;
 
 extern const PositionHashArray<1 << 12> pieceSqHashes;
-extern const PositionHashArray<65> enPassantSqHashes;
+extern const PositionHashArray<256> enPassantSqHashes;
 
 extern const PositionHash hashCanCastleL;
 extern const PositionHash hashCanCastleR;
+
+extern const PositionHashArray<2> sideToMoveHashes;
 
 // The hash key for a piece on the given square
 #define PIECE_HASH_KEY(piece, sq) ((i16)(piece | (sq << 5)))
 
 static const char* startFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+/// @brief Full attack info on a specific square
+struct AttackInfo {
+    Bitboard attackers;
+    Bitboard pinners;
+    Bitboard pinned;
+};
+
 /// @brief Non-trivial or unrecoverable state of the board which may be restored from memory.
 struct VolatileBoardState {
     /// @brief The amount of moves made without a capture or pawn move
-    i16 rule50Ply;
+    u8 rule50Ply = 0;
 
     /// @brief The current en passant target
     u8 enPassantTarget = NULL_SQ;
 
     /// @brief Castling status per color
     u8 castlingStatus[2] = { CAN_CASTLE_L | CAN_CASTLE_R, CAN_CASTLE_L | CAN_CASTLE_R };
-
-    /* Attacks, checkers, pinners, blockers, etc */
-    /// @brief Bitboards of checking squares per mobility type per color
-    Bitboard checkingSquares[2][MOBILITY_TYPE_COUNT] = { { 0 } }; 
-
-    /// @brief All checkers on the king per color
-    Bitboard checkers[2] = { 0, 0 };
-
-    /// @brief All pinning attackers in the position
-    Bitboard pinnersEstimate = 0;
-
-    /// @brief All pinned pieces in the position per color
-    Bitboard pinned = 0;
 };
 
 /// @brief Extended move representation. This is not the format the moves are generated in,
@@ -101,15 +100,22 @@ public:
     /* General State */
 
     /// @brief Whether it is white's turn to move
-    bool turn;
+    bool turn = WHITE;
 
     /// @brief The amount of moves made.
-    int ply;
+    int ply = 0;
 
     /* King State */
 
     /// @brief The index the king is currently on per color
     Sq kingIndexPerColor[2] = { NULL_SQ, NULL_SQ };
+
+    /* Attacks, checkers, pinners, blockers, etc */
+    /// @brief Bitboards of checking squares per mobility type per color
+    Bitboard checkingSquares[2][MOBILITY_TYPE_COUNT] = { { 0 } }; 
+
+    /// @brief All checkers on the king per color
+    Bitboard kingCheckers[2] = { 0, 0 };
 
     /// @brief The non trivial board state
     VolatileBoardState volatileState;
@@ -119,20 +125,20 @@ public:
     PositionHash pieceZHash;
 
 public:
-    inline VolatileBoardState* volatile_state() const { return (VolatileBoardState*) &volatileState; }
+    forceinline VolatileBoardState* volatile_state() const { return (VolatileBoardState*) &volatileState; }
 
     /* Piece access */
-    inline Piece piece_on(Sq index) const { return pieceArray[index]; }
-    inline Bitboard all_pieces() const { return allPieces; }
-    inline Bitboard pieces_for_side(Color color) const { return allPiecesPerColor[color]; }
-    inline Bitboard piece_bb(Piece p) const { return pieceBBs[p]; }
-    inline Bitboard pieces(PieceType pt) const { return pieceBBs[pt | WHITE_PIECE] | pieceBBs[pt | BLACK_PIECE]; }
-    inline Bitboard pieces(Color c, PieceType pt) const { return pieceBBs[pt | PIECE_COLOR_FOR(c)]; }
+    forceinline Piece piece_on(Sq index) const { return pieceArray[index]; }
+    forceinline Bitboard all_pieces() const { return allPieces; }
+    forceinline Bitboard pieces_for_side(Color color) const { return allPiecesPerColor[color]; }
+    forceinline Bitboard piece_bb(Piece p) const { return pieceBBs[p]; }
+    forceinline Bitboard pieces(PieceType pt) const { return pieceBBs[pt | WHITE_PIECE] | pieceBBs[pt | BLACK_PIECE]; }
+    forceinline Bitboard pieces(Color c, PieceType pt) const { return pieceBBs[pt | PIECE_COLOR_FOR(c)]; }
     template<typename... PieceTypes>
-    inline Bitboard pieces(PieceType pt, PieceTypes... pts) const;
+    forceinline Bitboard pieces(PieceType pt, PieceTypes... pts) const;
     template<typename... PieceTypes>
-    inline Bitboard pieces(Color color, PieceType pt, PieceTypes... pts) const;
-    inline Bitboard pieces_except_king(Color color) const { return pieces(color, PAWN, KNIGHT, BISHOP, ROOK, QUEEN); }
+    forceinline Bitboard pieces(Color color, PieceType pt, PieceTypes... pts) const;
+    forceinline Bitboard pieces_except_king(Color color) const { return pieces(color, PAWN, KNIGHT, BISHOP, ROOK, QUEEN); }
 
     /* Attacks */
     inline Bitboard calculate_attacks_on(Color color, Sq sq, /* out */ Bitboard *pinned = nullptr, /* out */ Bitboard *pinners = nullptr) const;
@@ -141,30 +147,37 @@ public:
 
     inline Bitboard attacks_by(Color attackingColor, PieceType pt) const;
     template<typename... PieceTypes>
-    inline Bitboard attacks_by(Color attackingColor, PieceType pt, PieceTypes... pts) const;
-    inline Bitboard attacks_by(Color attackingColor) const { return attacks_by(attackingColor, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING); }
+    forceinline Bitboard attacks_by(Color attackingColor, PieceType pt, PieceTypes... pts) const;
+    forceinline Bitboard attacks_by(Color attackingColor) const { return attacks_by(attackingColor, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING); }
 
-    inline Bitboard pawn_attacks_by(Color color) const;
+    forceinline Bitboard pawn_attacks_by(Color color) const;
+
+    inline Bitboard attacks_on(Sq sq, Bitboard blockers, Color attackingColor, PieceType pt) const;
+    template<typename... PieceTypes>
+    forceinline Bitboard attacks_on(Sq sq, Bitboard blockers, Color attackingColor, PieceType pt, PieceTypes... pts) const;
+    forceinline Bitboard attacks_on(Sq sq, Bitboard blockers, Color attackingColor) const { return attacks_on(sq, blockers, attackingColor, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING); }
 
     /* Checking */
-    inline Bitboard checkers(Color color) const { return volatile_state()->checkers[color]; }
-    inline Bitboard pinners() const { return volatile_state()->pinnersEstimate; }
-    inline Bitboard pinned() const { return volatile_state()->pinned; }
+    forceinline Bitboard checkers(Color color) const { return kingCheckers[color]; }
 
-    inline bool has_king(Color color) const { return kingIndexPerColor[color] != NULL_SQ; }
-    inline Sq king_index(Color color) const { return kingIndexPerColor[color]; }
+    forceinline bool has_king(Color color) const { return kingIndexPerColor[color] != NULL_SQ; }
+    forceinline Sq king_index(Color color) const { return kingIndexPerColor[color]; }
 
     /// @brief Set the given piece from the board, inlined to allow optimization in move making
     /// @param index The index to set the piece at.
     /// @param p The piece type to remove.
     template <bool updateState>
-    inline void set_piece(Sq index, Piece p);
+    forceinline void set_piece(Sq index, Piece p);
+    template <bool updateState>
+    forceinline void set_piece(Sq index, Piece p, Color color);
 
     /// @brief Remove the given piece from the board, inlined to allow optimization in move making
     /// @param index The index to remove the piece from.
     /// @param p The piece type to remove.
     template<bool updateState>
-    inline void unset_piece(Sq index, Piece p);
+    forceinline void unset_piece(Sq index, Piece p);
+    template<bool updateState>
+    forceinline void unset_piece(Sq index, Piece p, Color color);
 
     /// @brief Make the given move on the board.
     /// This does not check whether the move is legal.  
@@ -184,62 +197,70 @@ public:
 
     /// @brief Check if the king of the given color is in check.
     template<Color color>
-    inline bool is_in_check() const { return checkers(color) > 0; }
+    forceinline bool is_in_check() const { return checkers(color) > 0; }
 
     /// @brief Find the first rook on the given rank from either side.
     template<Color color, bool right>
-    inline u8 find_file_of_first_rook_on_rank(u8 rank) const;
+    forceinline u8 find_file_of_first_rook_on_rank(u8 rank) const;
 
     /// @brief Get the checking attack bitboard for the given mobility type.
     template<Color color, MobilityType mt>
-    inline Bitboard checking_attack_bb() const;
+    forceinline Bitboard checking_attack_bb() const;
 
     /// @brief Check whether a move of a piece with the given MT to the given index gives a check on the king of the given color.
     template<Color color, MobilityType mt>
-    inline bool is_check_attack(Sq index) const;
+    forceinline bool is_check_attack(Sq index) const;
 
     /// @brief Creates a bitboard set for all squares controlled by the given color piece with the given 'trivial' type 
     /// at the given position, assuming it is able to move, without masking out friendly pieces.
     template<PieceType pieceType>
-    inline Bitboard trivial_attack_bb(Sq index) const;
-    inline Bitboard trivial_attack_bb(Sq index, PieceType pt) const;
+    forceinline Bitboard trivial_attack_bb(Sq index) const;
+    forceinline Bitboard trivial_attack_bb(Sq index, PieceType pt) const;
     
     /// @brief Recalculate all attacking, pinning, checking, etc bitboards.
     void recalculate_state();
 
-    inline void clear_state_for_recalculation();
+    forceinline void clear_state_for_recalculation();
 
     template<Color color>
-    inline void recalculate_state_sided();
+    forceinline void recalculate_state_sided();
 
     /// @brief Load the current board status from the given FEN string
     /// @param str The FEN string or 'startpos'.
     void load_fen(const char* str);
+
+    /// @brief Load the current board status from the given FEN string
+    /// @param it The character iterator.
+    void load_fen(std::istream_iterator<char>& it, const std::istream_iterator<char>& end);
 
     /// @brief Whether the current position has insufficient material to deliver checkmate
     inline bool is_insufficient_material();
 
     /// @brief Perform some basic checks on the given move to ensure it isn't completely absurd 
     template<bool turn>
-    inline bool check_trivial_validity(Move move);
+    inline bool check_pseudo_legal(Move move) const;
+    
+    /// @brief Check whether the given move may be legal
+    template<bool turn>
+    forceinline bool check_maybe_legal(Move move) const;
 
-    inline u64 zhash();
+    /// @brief The main Zobrist hash of the board.
+    forceinline u64 zhash();
 };
 
 // Basically copied from Stockfish lol https://github.com/official-stockfish/Stockfish/blob/master/src/position.h
 template<typename... PieceTypes>
-inline Bitboard Board::pieces(PieceType pt, PieceTypes... pts) const {
+forceinline Bitboard Board::pieces(PieceType pt, PieceTypes... pts) const {
     return pieces(pt) | pieces(pts...);
 }
 
 template<typename... PieceTypes>
-inline Bitboard Board::pieces(Color color, PieceType pt, PieceTypes... pts) const {
+forceinline Bitboard Board::pieces(Color color, PieceType pt, PieceTypes... pts) const {
     return pieces(color, pt) | pieces(color, pts...);
 }
 
 template <bool updateState>
-inline void Board::set_piece(Sq index, Piece p) {
-    Color color = IS_WHITE_PIECE(p);
+forceinline void Board::set_piece(Sq index, Piece p, Color color) {
     pieceArray[index] = p;
     pieceBBs[p] |= 1ULL << index;
     allPiecesPerColor[color] |= 1ULL << index;    
@@ -256,9 +277,13 @@ inline void Board::set_piece(Sq index, Piece p) {
     }
 }
 
+template <bool updateState>
+forceinline void Board::set_piece(Sq index, Piece p) {
+    set_piece<updateState>(index, p, IS_WHITE_PIECE(p));
+}
+
 template<bool updateState>
-inline void Board::unset_piece(Sq index, Piece p) {
-    Color color = IS_WHITE_PIECE(p);
+forceinline void Board::unset_piece(Sq index, Piece p, Color color) {
     pieceArray[index] = NULL_PIECE;
     pieceBBs[p] &= ~(1ULL << index);
     allPiecesPerColor[color] &= ~(1ULL << index);   
@@ -270,16 +295,21 @@ inline void Board::unset_piece(Sq index, Piece p) {
     }
 }
 
+template<bool updateState>
+forceinline void Board::unset_piece(Sq index, Piece p) {
+    unset_piece<updateState>(index, p, IS_WHITE_PIECE(p));
+}
+
 // only updates the bitboards because the piece is replaced in the arrays
 // or all pieces bb regardless
-inline void remove_piece_replaced(Board* b, Sq index, Piece p, Color color) {
+forceinline void remove_piece_replaced(Board* b, Sq index, Piece p, Color color) {
     b->pieceBBs[p] &= ~(1ULL << index);
     b->allPiecesPerColor[color] &= ~(1ULL << index); 
     b->pieceZHash ^= pieceSqHashes[PIECE_HASH_KEY(p, index)];  
 }
 
 template<Color color, bool useExtMove, bool updateAttackState>
-void Board::make_move_unchecked(ExtMove<useExtMove>* extMove) {
+forceinline void Board::make_move_unchecked(ExtMove<useExtMove>* extMove) {
     const Move move = extMove->move;
 
     // extract all necessary information
@@ -305,14 +335,14 @@ void Board::make_move_unchecked(ExtMove<useExtMove>* extMove) {
     state->enPassantTarget = NULL_SQ;
 
     // remove from source position
-    unset_piece<false>(move.src, piece);
+    unset_piece<false>(move.src, piece, color);
 
     // handle captures, en passant is handled by the capture sq
     if (captured != NULL_PIECE) {
         if (move.dst != captureSq) {
             remove_piece_replaced(this, captureSq, captured, !color);
         } else {
-            unset_piece<false>(captureSq, captured);
+            unset_piece<false>(captureSq, captured, !color);
         }
         
         if (move.is_en_passant()) {
@@ -339,15 +369,15 @@ void Board::make_move_unchecked(ExtMove<useExtMove>* extMove) {
     if (move.is_castle_left()) {
         u8 rookFile = extMove->rookFile = find_file_of_first_rook_on_rank<color, false>(rank);
         u8 rookIndex = INDEX(rookFile, rank);
-        unset_piece<false>(rookIndex, rook);
-        set_piece<false>(/* move behind king on the right */ move.dst + 1, rook);
+        unset_piece<false>(rookIndex, rook, color);
+        set_piece<false>(/* move behind king on the right */ move.dst + 1, rook, color);
         state->castlingStatus[color] &= ~(CAN_CASTLE_L | CAN_CASTLE_R);
         goto finalize;
     } else if (move.is_castle_right()) {
         u8 rookFile = extMove->rookFile = find_file_of_first_rook_on_rank<color, true>(rank);
         u8 rookIndex = INDEX(rookFile, rank);
-        unset_piece<false>(rookIndex, rook);
-        set_piece<false>(/* move behind king on the left */ move.dst - 1, rook);
+        unset_piece<false>(rookIndex, rook, color);
+        set_piece<false>(/* move behind king on the left */ move.dst - 1, rook, color);
         state->castlingStatus[color] &= ~(CAN_CASTLE_L | CAN_CASTLE_R);
         goto finalize;
     }
@@ -362,7 +392,7 @@ void Board::make_move_unchecked(ExtMove<useExtMove>* extMove) {
        to avoid checking the remaining cases. */
 finalize:
     // set piece at destination
-    set_piece<false>(move.dst, piece);
+    set_piece<false>(move.dst, piece, color);
 
     if constexpr (updateAttackState) {
         // update state
@@ -375,7 +405,7 @@ finalize:
 }
 
 template<Color color, bool useExtMove>
-void Board::unmake_move_unchecked(ExtMove<useExtMove>* extMove) {
+forceinline void Board::unmake_move_unchecked(ExtMove<useExtMove>* extMove) {
     const Move move = extMove->move;
 
     // extract necessary information
@@ -397,28 +427,28 @@ void Board::unmake_move_unchecked(ExtMove<useExtMove>* extMove) {
     // handle captures and en passant
     if (captured != NULL_PIECE) {
         if (captureSq == move.dst) {
-            remove_piece_replaced(this, captureSq, dstPiece, !color);
-            set_piece<false>(captureSq, captured);
+            remove_piece_replaced(this, captureSq, dstPiece, color);
+            set_piece<false>(captureSq, captured, !color);
         } else {
-            unset_piece<false>(move.dst, dstPiece); 
-            set_piece<false>(captureSq, captured);
+            unset_piece<false>(move.dst, dstPiece, color); 
+            set_piece<false>(captureSq, captured, !color);
         }
 
         goto finalize; // captures can never be castle
     } else {
-        unset_piece<false>(move.dst, dstPiece);
+        unset_piece<false>(move.dst, dstPiece, color);
     }
 
     // undo castling
     if (move.is_castle_left()) {
         u8 rookIndex = INDEX(extMove->rookFile, RANK(move.dst));
-        set_piece<false>(rookIndex, rook);
-        unset_piece<false>(/* moved behind king on the right */ move.dst + 1, rook);
+        set_piece<false>(rookIndex, rook, color);
+        unset_piece<false>(/* moved behind king on the right */ move.dst + 1, rook, color);
         goto finalize;
     } else if (move.is_castle_right()) {
         u8 rookIndex = INDEX(extMove->rookFile, RANK(move.dst));
-        set_piece<false>(rookIndex, rook);
-        unset_piece<false>(/* moved behind king on the left */ move.dst - 1, rook);
+        set_piece<false>(rookIndex, rook, color);
+        unset_piece<false>(/* moved behind king on the left */ move.dst - 1, rook, color);
         goto finalize;
     }
 
@@ -426,13 +456,11 @@ void Board::unmake_move_unchecked(ExtMove<useExtMove>* extMove) {
        to avoid checking the remaining cases. */
 finalize:
     // return piece to source pos
-    set_piece<false>(move.src, piece);
+    set_piece<false>(move.src, piece, color);
 
     if constexpr (useExtMove) {
         // restore state
         this->volatileState = extMove->lastState;
-    } else {
-        recalculate_state();
     }
 
     // decr ply played
@@ -441,7 +469,7 @@ finalize:
 }
 
 template<Color color, bool right>
-inline u8 Board::find_file_of_first_rook_on_rank(u8 rank) const {
+forceinline u8 Board::find_file_of_first_rook_on_rank(u8 rank) const {
     u8 bitline = ((pieceBBs[color * WHITE_PIECE | ROOK] >> rank * 8) & 0xFF);
     if (!bitline) return NULL_SQ;
 
@@ -453,45 +481,45 @@ inline u8 Board::find_file_of_first_rook_on_rank(u8 rank) const {
 }
 
 template<Color color, MobilityType mt>
-inline Bitboard Board::checking_attack_bb() const {
+forceinline Bitboard Board::checking_attack_bb() const {
     if constexpr (mt == QUEEN_MOBILITY) {
         return checking_attack_bb<color, STRAIGHT>() | checking_attack_bb<color, DIAGONAL>();
     }
 
-    return volatile_state()->checkingSquares[color][mt];
+    return checkingSquares[color][mt];
 }
 
 template<Color color, MobilityType mt>
-inline bool Board::is_check_attack(Sq index) const {
-    return ((checking_attack_bb<color, mt>() >> index) & 0x1) > 0;
+forceinline bool Board::is_check_attack(Sq index) const {
+    return (checking_attack_bb<color, mt>() & (1ULL << index)) > 0;
 }
 
 template<>
-inline Bitboard Board::trivial_attack_bb<KNIGHT>(Sq index) const {
+forceinline Bitboard Board::trivial_attack_bb<KNIGHT>(Sq index) const {
     return lookup::knightAttackBBs.values[index];
 }
 
 template<>
-inline Bitboard Board::trivial_attack_bb<ROOK>(Sq index) const {
+forceinline Bitboard Board::trivial_attack_bb<ROOK>(Sq index) const {
     return lookup::magic::rook_attack_bb(index, allPieces);
 }
 
 template<>
-inline Bitboard Board::trivial_attack_bb<BISHOP>(Sq index) const {
+forceinline Bitboard Board::trivial_attack_bb<BISHOP>(Sq index) const {
     return lookup::magic::bishop_attack_bb(index, allPieces);
 }
 
 template<>
-inline Bitboard Board::trivial_attack_bb<QUEEN>(Sq index) const {
+forceinline Bitboard Board::trivial_attack_bb<QUEEN>(Sq index) const {
     return trivial_attack_bb<ROOK>(index) | trivial_attack_bb<BISHOP>(index);
 }
 
 template<>
-inline Bitboard Board::trivial_attack_bb<KING>(Sq index) const {
+forceinline Bitboard Board::trivial_attack_bb<KING>(Sq index) const {
     return lookup::kingMovementBBs.values[index];
 }
 
-inline Bitboard Board::trivial_attack_bb(Sq index, PieceType pt) const {
+forceinline Bitboard Board::trivial_attack_bb(Sq index, PieceType pt) const {
     if (pt == KNIGHT) return trivial_attack_bb<KNIGHT>(index);
     else if (pt == BISHOP) return trivial_attack_bb<BISHOP>(index);
     else if (pt == ROOK) return trivial_attack_bb<ROOK>(index);
@@ -500,14 +528,14 @@ inline Bitboard Board::trivial_attack_bb(Sq index, PieceType pt) const {
     return 0;
 }
 
-inline Bitboard Board::attackers(Sq index, Color attackingColor) const {
+forceinline Bitboard Board::attackers(Sq index, Color attackingColor) const {
     return (lookup::pawnAttackBBs.values[!attackingColor][index] & pieces(attackingColor, PAWN)) | 
             (lookup::knightAttackBBs.values[index] & pieces(attackingColor, KNIGHT)) |
             (trivial_attack_bb<ROOK>(index) & pieces(attackingColor, ROOK, QUEEN)) |
             (trivial_attack_bb<BISHOP>(index) & pieces(attackingColor, BISHOP, QUEEN));
 }
 
-inline Bitboard Board::attacks_by(Color attackingColor, PieceType pt) const {
+forceinline Bitboard Board::attacks_by(Color attackingColor, PieceType pt) const {
     if (pt == PAWN) {
         return pawn_attacks_by(attackingColor);
     }
@@ -522,11 +550,11 @@ inline Bitboard Board::attacks_by(Color attackingColor, PieceType pt) const {
 }
 
 template<typename... PieceTypes>
-inline Bitboard Board::attacks_by(Color attackingColor, PieceType pt, PieceTypes... pts) const {
+forceinline Bitboard Board::attacks_by(Color attackingColor, PieceType pt, PieceTypes... pts) const {
     return attacks_by(attackingColor, pt) | attacks_by(attackingColor, pts...);
 }
 
-inline Bitboard Board::pawn_attacks_by(Color color) const {
+forceinline Bitboard Board::pawn_attacks_by(Color color) const {
     const DirectionOffset UpOffset = (color ? OFF_NORTH : OFF_SOUTH);
     const Bitboard pawns = pieces(color, PAWN);
     Bitboard attacksEast = shift(pawns & BB_FILES_17_MASK, UpOffset + OFF_EAST);
@@ -534,18 +562,37 @@ inline Bitboard Board::pawn_attacks_by(Color color) const {
     return attacksEast | attacksWest;
 }
 
+forceinline Bitboard Board::attacks_on(Sq sq, Bitboard blockers, Color attackingColor, PieceType pt) const {
+    if (pt == PAWN) return lookup::pawnAttackBBs.values[attackingColor][sq] & pieces(attackingColor, PAWN); 
+    if (pt == KNIGHT) return lookup::knightAttackBBs.values[sq] & pieces(attackingColor, KNIGHT);
+    if (pt == KING) return lookup::kingMovementBBs.values[sq] & pieces(attackingColor, KING);
+    if (pt == BISHOP) return lookup::magic::bishop_attack_bb(sq, blockers) & pieces(attackingColor, BISHOP);
+    if (pt == ROOK) return lookup::magic::rook_attack_bb(sq, blockers) & pieces(attackingColor, ROOK);
+    if (pt == QUEEN) return (lookup::magic::rook_attack_bb(sq, blockers) | lookup::magic::bishop_attack_bb(sq, blockers)) & pieces(attackingColor, QUEEN);
+    return 0;
+}
+
+template<typename... PieceTypes>
+forceinline Bitboard Board::attacks_on(Sq sq, Bitboard blockers, Color attackingColor, PieceType pt, PieceTypes... pts) const {
+    return attacks_on(sq, blockers, attackingColor, pt) | attacks_on(sq, blockers, attackingColor, pts...);
+}
+
 /* 
     Volatile Board States
 */
 
-inline void Board::clear_state_for_recalculation() {
+forceinline void Board::recalculate_state() {
+    clear_state_for_recalculation();
+    recalculate_state_sided<WHITE>();
+    recalculate_state_sided<BLACK>();
+}
+
+forceinline void Board::clear_state_for_recalculation() {
     VolatileBoardState* state = volatile_state();
-    state->pinned = 0;
-    state->pinnersEstimate = 0;
 }
 
 template<Color color>
-inline void Board::recalculate_state_sided() {
+forceinline void Board::recalculate_state_sided() {
     VolatileBoardState* state = this->volatile_state();
 
     const Bitboard allPieces = all_pieces();
@@ -555,61 +602,28 @@ inline void Board::recalculate_state_sided() {
     if (has_king(color)) {
         // calculate king checking squares
         const u8 kingIndex = king_index(color);
-        const Bitboard pawnCBB = state->checkingSquares[color][PAWN] = lookup::pawnAttackBBs.values[color][kingIndex];
-        const Bitboard knightCBB = state->checkingSquares[color][KNIGHT] = lookup::knightAttackBBs.values[kingIndex];
+        const Bitboard pawnCBB = this->checkingSquares[color][PAWN] = lookup::pawnAttackBBs.values[!color][kingIndex];
+        const Bitboard knightCBB = this->checkingSquares[color][KNIGHT] = lookup::knightAttackBBs.values[kingIndex];
         const u64 rookKey = lookup::magic::rook_attack_key(kingIndex, allPieces);
         const u64 bishopKey = lookup::magic::bishop_attack_key(kingIndex, allPieces);
-        const Bitboard rookCBB = state->checkingSquares[color][ROOK] = lookup::magic::get_rook_attack_bb(kingIndex, rookKey);
-        const Bitboard bishopCBB = state->checkingSquares[color][BISHOP] = lookup::magic::get_bishop_attack_bb(kingIndex, bishopKey);
-        const Bitboard queenCBB = state->checkingSquares[color][QUEEN] = rookCBB | bishopCBB;
+        const Bitboard rookCBB = this->checkingSquares[color][ROOK] = lookup::magic::get_rook_attack_bb(kingIndex, rookKey);
+        const Bitboard bishopCBB = this->checkingSquares[color][BISHOP] = lookup::magic::get_bishop_attack_bb(kingIndex, bishopKey);
+        const Bitboard queenCBB = this->checkingSquares[color][QUEEN] = rookCBB | bishopCBB;
         
         // calculate checkers
         Bitboard checkers = (pieces(!color, PAWN) & pawnCBB) | (pieces(!color, KNIGHT) & knightCBB) |
                             (pieces(!color, ROOK, QUEEN) & rookCBB | (pieces(!color, BISHOP, QUEEN) & bishopCBB));
-        state->checkers[color] = checkers;
-
-        if (true) { return; }
-
-        // calculate xray attacks on the king
-        Bitboard xrayRook = lookup::magic::rook_xray_bb(kingIndex, rookKey); 
-        Bitboard xrayBishop = lookup::magic::bishop_xray_bb(kingIndex, bishopKey);
-
-        // calculate pinners
-        Bitboard pinnerRooks = pieces(!color, ROOK) & xrayRook & /* normal rook bb to avoid 2 pieces being marked as pinners */ ~rookCBB;
-        Bitboard pinnerBishops = pieces(!color, BISHOP) & xrayBishop & ~bishopCBB;
-        Bitboard pinnerQueens = pieces(!color, QUEEN) & (xrayRook | xrayBishop) & ~queenCBB;
-
-        // for each enemy sliding piece in the xray bb, 
-        // use it to calculate potential pinned pieces
-        Bitboard pinned = 0;
-        while (pinnerRooks) {
-            Sq index = _pop_lsb(pinnerRooks);
-            pinned |= trivial_attack_bb<ROOK>(index) & rookCBB & ourPieces;
-        }
-
-        while (pinnerBishops) {
-            Sq index = _pop_lsb(pinnerBishops);
-            pinned |= trivial_attack_bb<BISHOP>(index) & bishopCBB & ourPieces;
-        }
-
-        while (pinnerQueens) {
-            Sq index = _pop_lsb(pinnerQueens);
-            pinned |= trivial_attack_bb<QUEEN>(index) & queenCBB & ourPieces;
-        }
-
-        state->pinned |= pinned;
-
-        // set pinners
-        state->pinnersEstimate |= pinnerRooks | pinnerBishops | pinnerQueens;
+        this->kingCheckers[color] = checkers;
     }
 }
 
-inline bool Board::is_insufficient_material() {
-    return false;
+forceinline bool Board::is_insufficient_material() {
+    // king and king no pieces
+    return _popcount64(allPieces) <= 2;
 }
 
 template<bool turn>
-inline bool Board::check_trivial_validity(Move move) {
+forceinline bool Board::check_pseudo_legal(Move move) const {
     Piece p = piece_on(move.src);
     if (p == NULL_PIECE || COLOR_OF_PIECE(p) != turn) return false;
 
@@ -627,14 +641,21 @@ inline bool Board::check_trivial_validity(Move move) {
     return true;
 }
 
-inline u64 Board::zhash() {
-    return pieceZHash ^ enPassantSqHashes[volatile_state()->enPassantTarget];
+template<bool turn>
+forceinline bool Board::check_maybe_legal(Move move) const {
+    Bitboard blockers = allPieces & ~(1ULL << move.src) | (1ULL << move.dst) & ~(move.special_capture() * (1ULL << move.capture_index<turn>()));
+    Bitboard attacksOnKing = attacks_on(king_index(turn), blockers, !turn, /* only sliders can be pinning pieces */ BISHOP, ROOK, QUEEN);
+    return attacksOnKing == 0;
+}
+
+forceinline u64 Board::zhash() {
+    return pieceZHash ^ enPassantSqHashes[volatile_state()->enPassantTarget] ^ sideToMoveHashes[turn];
 }
 
 /* Impl for the Move methods which take the board */
-inline Piece Move::moved_piece(Board const* b) const { return b->pieceArray[src]; };
-inline Piece Move::captured_piece(Board const* b) const { return b->pieceArray[dst]; }
-inline bool Move::is_capture(Board const* b) const { return (b->allPieces & (1ULL << dst)) > 1; }
-inline bool Move::is_check_estimated(Board const* b) const { return (b->volatile_state()->checkingSquares[!IS_WHITE_PIECE(moved_piece(b))][TYPE_OF_PIECE(moved_piece(b))] & (1ULL << dst)) > 1; }
+forceinline Piece Move::moved_piece(Board const* b) const { return b->pieceArray[src]; };
+forceinline Piece Move::captured_piece(Board const* b) const { return b->pieceArray[dst]; }
+forceinline bool Move::is_capture(Board const* b) const { return (b->allPieces & (1ULL << dst)) > 1; }
+forceinline bool Move::is_check_estimated(Board const* b) const { return (b->checkingSquares[!IS_WHITE_PIECE(moved_piece(b))][TYPE_OF_PIECE(moved_piece(b))] & (1ULL << dst)) > 1; }
 
 }

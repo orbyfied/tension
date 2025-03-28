@@ -5,7 +5,7 @@
 namespace tc {
 
 template<Color color>
-inline i32 count_material_eval(Board* b) {
+forceinline i32 count_material_eval(Board* b) {
     i32 count = 0;
     count += _popcount64(b->pieces(color, PAWN)) * evalValuePawn;
     count += _popcount64(b->pieces(color, KNIGHT)) * evalValueKnight;
@@ -16,12 +16,14 @@ inline i32 count_material_eval(Board* b) {
 }
 
 /// @brief Basic, classic static evaluation.
-struct BasicStaticEvaluator : Evaluator {
-    virtual i32 eval(Board* board, EvalData* evalData) {
+struct BasicStaticEvaluator {
+    inline i32 eval(Board* board) {
         i32 score = 0;
 
         // count material score
         score += count_material_eval<WHITE>(board) - count_material_eval<BLACK>(board);
+
+        // score pawn structure
         
         return score;
     }

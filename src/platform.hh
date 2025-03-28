@@ -10,7 +10,7 @@
 
 #endif
 
-#define forceinline __attribute__((always_inline))
+#define forceinline __forceinline
 
 // Architecture
 #if defined(__clang__) || defined(__gcc__)
@@ -34,7 +34,7 @@
 #define _pext(src, mask) _pext_u64(src, mask) 
 #define _pdep(src, mask) _pdep_u64(src, mask)
 
-inline u8 _pop_lsb(u64& i) {
+forceinline u8 _pop_lsb(u64& i) {
     const u8 idx = _ctz64(i);
     i &= i - 1;
     return idx;

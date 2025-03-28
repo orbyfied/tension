@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <immintrin.h>
 #include "debugbreak.h"
+#include "logging.hh"
 
 #define MIN(a, b) (((a) > (b)) ? (b) : (a))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -23,10 +24,14 @@ typedef long double f64;
 
 /* Basic Types */
 typedef u8 Sq;
-#define NULL_SQ ((Sq)64)
+#define NULL_SQ ((Sq)0xFF)
 
 /// @brief The boolean color of a player
 typedef bool Color;
+
+#define INDEX(file, rank) ((rank) * 8 + (file))
+#define FILE(index) ((index) & 0x7)
+#define RANK(index) (((index) >> 3) & 0x7)
 
 enum : bool {
   BLACK = 0,

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "types.hh"
-#include "evaldef.h"
+#include "evaldef.hh"
 #include <stdlib.h>
 
 namespace tc {

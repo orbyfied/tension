@@ -1,0 +1,6 @@
+[submodule "popl"]
+	path = popl
+	url = https://github.com/badaix/popl.git
+[submodule "vendor/popl"]
+	path = vendor/popl
+	url = https://github.com/badaix/popl.git

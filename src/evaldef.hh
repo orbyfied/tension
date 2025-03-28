@@ -13,6 +13,7 @@
 #define EVAL_WIN  (-M0 + 999)    // win for white
 #define EVAL_LOSS (-EVAL_WIN)    // loss for current color/white
 #define ERR_EVAL  (0x1F1F1F1F)   // error evaluation
+#define NULL_EVAL (0x2F2F2F2F)   // null evaluation
 #define EVAL_DRAW 0              // any draw
 #define M0  (-9999 * EVAL_SCALE) // mate in 0
 #define MRS (9000 * EVAL_SCALE)  // where the mate range starts in positive eval
